@@ -311,6 +311,14 @@
     flex-wrap:wrap;
     margin-top:16px;
   }
+  .tax-toggle-row-top{
+    margin-top:0;
+    margin-bottom:28px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--gold);
+    padding:16px 20px;
+  }
   .tax-toggle-label{
     font-family:'IBM Plex Mono', monospace;
     font-size:0.72rem;
@@ -358,7 +366,7 @@
   }
   table{
     width:100%;
-    min-width:680px;
+    min-width:780px;
     table-layout:fixed;
     border-collapse:collapse;
     font-family:'IBM Plex Mono', monospace;
@@ -510,6 +518,14 @@
       </div>
     </div>
 
+    <div class="tax-toggle-row tax-toggle-row-top">
+      <span class="tax-toggle-label">Savings contribution is:</span>
+      <div class="tax-toggle" role="tablist">
+        <button type="button" class="toggle-btn active" id="toggle-pretax" role="tab" aria-selected="true">Pre-tax (Traditional)</button>
+        <button type="button" class="toggle-btn" id="toggle-roth" role="tab" aria-selected="false">After-tax (Roth)</button>
+      </div>
+    </div>
+
     <div class="stats-row">
       <div class="stat gold">
         <div class="stat-label">Projected balance at retirement</div>
@@ -576,18 +592,10 @@
       <div class="chart-title">Year-by-year contribution detail</div>
       <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement. % of pot = that year's future value as a share of all contribution future values combined.</div>
 
-      <div class="tax-toggle-row">
-        <span class="tax-toggle-label">Savings contribution is:</span>
-        <div class="tax-toggle" role="tablist">
-          <button type="button" class="toggle-btn active" id="toggle-pretax" role="tab" aria-selected="true">Pre-tax (Traditional)</button>
-          <button type="button" class="toggle-btn" id="toggle-roth" role="tab" aria-selected="false">After-tax (Roth)</button>
-        </div>
-      </div>
-
       <div class="tax-disclaimer">
         Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, credits, and other deductions — not tax advice.
         Pre-tax (Traditional) reduces that year's taxable income by the savings amount before computing tax, matching a traditional 401(k)/IRA. After-tax (Roth) taxes the full salary and contributes what's left after tax, matching a Roth account.
-        Net take-home also subtracts an estimated 2026 FICA tax (6.2% Social Security up to the $184,500 wage base, plus 1.45–2.35% Medicare), applied to gross wages regardless of the pre-tax/Roth toggle — this affects only the net take-home figure, not the Federal tax column or any withdrawal-year calculations.
+        FICA (est.) is 2026 Social Security (6.2% up to the $184,500 wage base) plus Medicare (1.45–2.35%), applied to gross wages regardless of the pre-tax/Roth toggle. Both Federal tax and FICA are subtracted to get net take-home; FICA never affects any other figure on the page.
       </div>
       <div class="table-scroll">
         <table id="year-table">
@@ -596,6 +604,7 @@
               <th class="col-age">Age</th>
               <th>Salary</th>
               <th class="col-tax">Federal tax (est.)</th>
+              <th class="col-tax">FICA (est.)</th>
               <th>Savings %</th>
               <th>Savings amount</th>
               <th class="col-net">Net take-home</th>
@@ -911,6 +920,7 @@
         '<td class="age">' + row.age + '</td>' +
         '<td>' + fmtMoney(row.salary) + '</td>' +
         '<td class="tax">' + fmtMoney(row.federalTax) + '</td>' +
+        '<td class="tax">' + fmtMoney(row.ficaTax) + '</td>' +
         '<td>' + (row.rate * 100).toFixed(1) + '%</td>' +
         '<td>' + fmtMoney(row.contribution) + '</td>' +
         '<td class="net">' + fmtMoney(row.netTakeHome) + '</td>' +
