@@ -525,10 +525,13 @@
 
     <hr class="divider">
     <div class="section-label">Investment assumption</div>
+    <p class="section-help-text">
+      Total nominal return each year = inflation + capital gain over inflation + qualified dividend yield.
+    </p>
 
     <div class="field">
-      <label>Return over inflation <span class="val" id="val-returnRate">4%</span></label>
-      <input type="range" id="returnRate" min="0" max="12" value="4" step="0.25">
+      <label>Capital gain over inflation <span class="val" id="val-capitalGainRate">4%</span></label>
+      <input type="range" id="capitalGainRate" min="0" max="12" value="4" step="0.25">
     </div>
 
     <div class="field">
@@ -536,7 +539,7 @@
       <input type="range" id="dividendYield" min="0" max="6" value="2" step="0.25">
     </div>
     <p class="section-help-text">
-      Share of the total return paid out as qualified dividends each year. Only affects the Taxable (Brokerage) option — dividends are taxed annually at capital gains rates, so only the after-tax portion gets reinvested. Traditional and Roth are unaffected, since neither is taxed on internal account activity.
+      Dividend yield adds to total return on top of inflation and capital gain — raising it increases your overall return, not just its composition. Only affects the Taxable (Brokerage) option: dividends are taxed annually at capital gains rates, so only the after-tax portion gets reinvested. Traditional and Roth are unaffected, since neither is taxed on internal account activity.
     </p>
 
     <hr class="divider">
@@ -803,7 +806,7 @@
     lateIncrement: document.getElementById('lateIncrement'),
     lateCap: document.getElementById('lateCap'),
     lateGrowth: document.getElementById('lateGrowth'),
-    returnRate: document.getElementById('returnRate'),
+    capitalGainRate: document.getElementById('capitalGainRate'),
     dividendYield: document.getElementById('dividendYield'),
   };
   const valEls = {
@@ -816,7 +819,7 @@
     lateIncrement: document.getElementById('val-lateIncrement'),
     lateCap: document.getElementById('val-lateCap'),
     lateGrowth: document.getElementById('val-lateGrowth'),
-    returnRate: document.getElementById('val-returnRate'),
+    capitalGainRate: document.getElementById('val-capitalGainRate'),
     dividendYield: document.getElementById('val-dividendYield'),
   };
 
@@ -971,7 +974,12 @@
     const lateIncrement = parseFloat(els.lateIncrement.value) / 100;
     const lateCap = parseFloat(els.lateCap.value) / 100;
     const lateGrowth = inflation + parseFloat(els.lateGrowth.value) / 100;
-    const returnRate = inflation + parseFloat(els.returnRate.value) / 100;
+    const capitalGainRate = parseFloat(els.capitalGainRate.value) / 100;
+    const dividendYield = parseFloat(els.dividendYield.value) / 100;
+    // Total nominal return = inflation + capital gain over inflation + qualified
+    // dividend yield. Dividend yield is additive — raising it increases total
+    // return, it doesn't just reallocate an existing return between buckets.
+    const returnRate = inflation + capitalGainRate + dividendYield;
 
     const years = retireAge - age;
     const ages = [age];
@@ -989,10 +997,10 @@
     let finalYearContribution = 0;
     let finalYearRate = 0;
 
-    const dividendYield = parseFloat(els.dividendYield.value) / 100;
     // What share of a given period's total growth is the dividend portion,
-    // vs. price appreciation. Dividend yield can't exceed the total return.
-    const dividendShareOfReturn = returnRate > 0 ? Math.min(dividendYield / returnRate, 1) : 0;
+    // vs. capital gain. Well-defined by construction since dividendYield is
+    // part of returnRate's own definition above.
+    const dividendShareOfReturn = returnRate > 0 ? dividendYield / returnRate : 0;
 
     for (let y = 1; y <= years; y++){
       const ageThisYear = age + y - 1;
@@ -1156,7 +1164,7 @@
     valEls.lateIncrement.textContent = els.lateIncrement.value + '%';
     valEls.lateCap.textContent = els.lateCap.value + '%';
     valEls.lateGrowth.textContent = els.lateGrowth.value + '%';
-    valEls.returnRate.textContent = els.returnRate.value + '%';
+    valEls.capitalGainRate.textContent = els.capitalGainRate.value + '%';
     valEls.dividendYield.textContent = els.dividendYield.value + '%';
   }
 
