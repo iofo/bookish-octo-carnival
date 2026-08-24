@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Retirement Projection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#10182A;
+    --panel:#172136;
+    --panel-2:#1C2740;
+    --paper:#EDE8DD;
+    --paper-dim:#9AA0AF;
+    --gold:#C9A227;
+    --teal:#4C8577;
+    --line:#2A3550;
+    --line-soft:#212D48;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--paper);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+  }
+  ::selection{ background:var(--gold); color:var(--bg); }
+  a:focus-visible, input:focus-visible, button:focus-visible{
+    outline:2px solid var(--gold);
+    outline-offset:2px;
+  }
+
+  header{
+    border-bottom:1px solid var(--line);
+    padding:28px 40px;
+  }
+  header .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin-bottom:8px;
+  }
+  header h1{
+    font-family:'Newsreader', serif;
+    font-weight:500;
+    font-size:1.9rem;
+    letter-spacing:0.01em;
+  }
+  header h1 em{ color:var(--teal); font-style:italic; font-weight:400; }
+
+  .layout{
+    display:grid;
+    grid-template-columns:340px 1fr;
+    min-height:calc(100vh - 96px);
+  }
+  @media (max-width:900px){
+    .layout{ grid-template-columns:1fr; }
+  }
+
+  /* ---------- FORM PANEL ---------- */
+  .panel{
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    padding:36px 32px;
+  }
+  @media (max-width:900px){ .panel{ border-right:none; border-bottom:1px solid var(--line); } }
+
+  .field{ margin-bottom:26px; }
+  .field label{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-size:0.82rem;
+    color:var(--paper-dim);
+    margin-bottom:10px;
+  }
+  .field label span.val{
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--paper);
+    font-size:0.86rem;
+  }
+  .field input[type="range"]{
+    -webkit-appearance:none;
+    width:100%;
+    height:2px;
+    background:var(--line);
+    border-radius:1px;
+    outline:none;
+  }
+  .field input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:14px; height:14px;
+    border-radius:50%;
+    background:var(--gold);
+    cursor:pointer;
+    border:2px solid var(--panel);
+    box-shadow:0 0 0 1px var(--gold);
+  }
+  .field input[type="range"]::-moz-range-thumb{
+    width:14px; height:14px;
+    border-radius:50%;
+    background:var(--gold);
+    cursor:pointer;
+    border:2px solid var(--panel);
+  }
+  .field input[type="number"]{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.92rem;
+    padding:9px 12px;
+    border-radius:2px;
+  }
+  .divider{
+    border:none;
+    border-top:1px solid var(--line);
+    margin:28px 0;
+  }
+  .section-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--teal);
+    margin-bottom:20px;
+  }
+
+  /* ---------- MAIN ---------- */
+  main{ padding:40px; }
+  @media (max-width:600px){ main{ padding:24px; } }
+
+  .stats-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    margin-bottom:36px;
+  }
+  @media (max-width:600px){ .stats-row{ grid-template-columns:1fr; } }
+  .stat{
+    background:var(--panel);
+    padding:22px 24px;
+  }
+  .stat .stat-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--paper-dim);
+    margin-bottom:10px;
+  }
+  .stat .stat-value{
+    font-family:'Newsreader', serif;
+    font-size:1.85rem;
+    font-weight:500;
+  }
+  .stat.gold .stat-value{ color:var(--gold); }
+  .stat.teal .stat-value{ color:var(--teal); }
+
+  .chart-wrap{
+    background:var(--panel);
+    border:1px solid var(--line);
+    padding:28px 24px 20px;
+    position:relative;
+  }
+  .chart-title{
+    font-family:'Newsreader', serif;
+    font-size:1.2rem;
+    margin-bottom:4px;
+  }
+  .chart-sub{
+    font-size:0.84rem;
+    color:var(--paper-dim);
+    margin-bottom:20px;
+  }
+  .chart-canvas-holder{ height:420px; }
+
+  .legend-row{
+    display:flex;
+    gap:24px;
+    margin-top:18px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    color:var(--paper-dim);
+    flex-wrap:wrap;
+  }
+  .legend-row .dot{
+    display:inline-block;
+    width:9px; height:9px;
+    border-radius:50%;
+    margin-right:7px;
+  }
+
+  footer{
+    padding:24px 40px;
+    color:var(--paper-dim);
+    font-size:0.78rem;
+    border-top:1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Retirement projection</div>
+  <h1>Watch compounding do <em>most</em> of the work.</h1>
+</header>
+
+<div class="layout">
+
+  <div class="panel">
+    <div class="section-label">Where you stand</div>
+
+    <div class="field">
+      <label>Current age <span class="val" id="val-age">30</span></label>
+      <input type="range" id="age" min="18" max="65" value="30" step="1">
+    </div>
+
+    <div class="field">
+      <label>Retirement age <span class="val" id="val-retireAge">65</span></label>
+      <input type="range" id="retireAge" min="45" max="75" value="65" step="1">
+    </div>
+
+    <div class="field">
+      <label>Current annual salary</label>
+      <input type="number" id="salary" value="75000" min="0" step="1000">
+    </div>
+
+    <div class="field">
+      <label>Current retirement savings</label>
+      <input type="number" id="balance" value="20000" min="0" step="500">
+    </div>
+
+    <hr class="divider">
+    <div class="section-label">Assumptions</div>
+
+    <div class="field">
+      <label>Savings rate <span class="val" id="val-savingsRate">12%</span></label>
+      <input type="range" id="savingsRate" min="0" max="40" value="12" step="0.5">
+    </div>
+
+    <div class="field">
+      <label>Salary growth rate <span class="val" id="val-growthRate">3%</span></label>
+      <input type="range" id="growthRate" min="0" max="10" value="3" step="0.25">
+    </div>
+
+    <div class="field">
+      <label>Expected investment return <span class="val" id="val-returnRate">7%</span></label>
+      <input type="range" id="returnRate" min="0" max="12" value="7" step="0.25">
+    </div>
+  </div>
+
+  <main>
+    <div class="stats-row">
+      <div class="stat gold">
+        <div class="stat-label">Projected balance at retirement</div>
+        <div class="stat-value" id="stat-final">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Total you contribute</div>
+        <div class="stat-value" id="stat-contrib">—</div>
+      </div>
+      <div class="stat teal">
+        <div class="stat-label">Total investment growth</div>
+        <div class="stat-value" id="stat-growth">—</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-title">Balance over time</div>
+      <div class="chart-sub">Contributions vs. investment growth, stacked to show total projected balance by age.</div>
+      <div class="chart-canvas-holder">
+        <canvas id="chart"></canvas>
+      </div>
+      <div class="legend-row">
+        <span><span class="dot" style="background:#4C8577"></span>Your contributions (cumulative)</span>
+        <span><span class="dot" style="background:#C9A227"></span>Investment growth (cumulative)</span>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<footer>
+  Estimates only — assumes constant annual rates, ignores taxes, fees, and inflation. Not financial advice.
+</footer>
+
+<script>
+  const els = {
+    age: document.getElementById('age'),
+    retireAge: document.getElementById('retireAge'),
+    salary: document.getElementById('salary'),
+    balance: document.getElementById('balance'),
+    savingsRate: document.getElementById('savingsRate'),
+    growthRate: document.getElementById('growthRate'),
+    returnRate: document.getElementById('returnRate'),
+  };
+  const valEls = {
+    age: document.getElementById('val-age'),
+    retireAge: document.getElementById('val-retireAge'),
+    savingsRate: document.getElementById('val-savingsRate'),
+    growthRate: document.getElementById('val-growthRate'),
+    returnRate: document.getElementById('val-returnRate'),
+  };
+
+  const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('en-US');
+
+  function project(){
+    let age = parseInt(els.age.value);
+    let retireAge = parseInt(els.retireAge.value);
+    if (retireAge <= age) retireAge = age + 1;
+    const salary0 = parseFloat(els.salary.value) || 0;
+    const balance0 = parseFloat(els.balance.value) || 0;
+    const savingsRate = parseFloat(els.savingsRate.value) / 100;
+    const growthRate = parseFloat(els.growthRate.value) / 100;
+    const returnRate = parseFloat(els.returnRate.value) / 100;
+
+    const years = retireAge - age;
+    const ages = [age];
+    const balances = [balance0];
+    const cumContrib = [0];
+    const cumGrowth = [0];
+
+    let balance = balance0;
+    let salary = salary0;
+    let totalContrib = 0;
+    let totalGrowth = 0;
+
+    for (let y = 1; y <= years; y++){
+      const contribution = salary * savingsRate;
+      const growthThisYear = balance * returnRate;
+      balance = balance + growthThisYear + contribution;
+      totalContrib += contribution;
+      totalGrowth += growthThisYear;
+      salary = salary * (1 + growthRate);
+
+      ages.push(age + y);
+      balances.push(balance);
+      cumContrib.push(totalContrib);
+      cumGrowth.push(totalGrowth);
+    }
+
+    return { ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance };
+  }
+
+  let chart;
+  function render(){
+    valEls.age.textContent = els.age.value;
+    valEls.retireAge.textContent = els.retireAge.value;
+    valEls.savingsRate.textContent = els.savingsRate.value + '%';
+    valEls.growthRate.textContent = els.growthRate.value + '%';
+    valEls.returnRate.textContent = els.returnRate.value + '%';
+
+    const data = project();
+
+    document.getElementById('stat-final').textContent = fmtMoney(data.final);
+    document.getElementById('stat-contrib').textContent = fmtMoney(data.totalContrib + parseFloat(els.balance.value || 0));
+    document.getElementById('stat-growth').textContent = fmtMoney(data.totalGrowth);
+
+    const ctx = document.getElementById('chart').getContext('2d');
+    const startBalance = parseFloat(els.balance.value) || 0;
+    const contribSeries = data.cumContrib.map(c => c + startBalance);
+    const growthSeries = data.cumGrowth;
+
+    if (chart){
+      chart.data.labels = data.ages;
+      chart.data.datasets[0].data = contribSeries;
+      chart.data.datasets[1].data = growthSeries;
+      chart.update();
+      return;
+    }
+
+    chart = new Chart(ctx, {
+      type:'line',
+      data:{
+        labels:data.ages,
+        datasets:[
+          {
+            label:'Contributions',
+            data:contribSeries,
+            borderColor:'#4C8577',
+            backgroundColor:'rgba(76,133,119,0.35)',
+            fill:true,
+            stack:'stack1',
+            tension:0.25,
+            pointRadius:0,
+            borderWidth:2,
+          },
+          {
+            label:'Investment growth',
+            data:growthSeries,
+            borderColor:'#C9A227',
+            backgroundColor:'rgba(201,162,39,0.35)',
+            fill:true,
+            stack:'stack1',
+            tension:0.25,
+            pointRadius:0,
+            borderWidth:2,
+          }
+        ]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        scales:{
+          x:{
+            title:{ display:true, text:'Age', color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:11 } },
+            ticks:{ color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:10 } },
+            grid:{ color:'#212D48' }
+          },
+          y:{
+            stacked:true,
+            ticks:{
+              color:'#9AA0AF',
+              font:{ family:'IBM Plex Mono', size:10 },
+              callback:(v)=> '$' + (v/1000).toFixed(0) + 'k'
+            },
+            grid:{ color:'#212D48' }
+          }
+        },
+        plugins:{
+          legend:{ display:false },
+          tooltip:{
+            backgroundColor:'#1C2740',
+            borderColor:'#2A3550',
+            borderWidth:1,
+            titleFont:{ family:'IBM Plex Mono', size:12 },
+            bodyFont:{ family:'IBM Plex Mono', size:12 },
+            callbacks:{
+              title: (items) => 'Age ' + items[0].label,
+              label: (item) => item.dataset.label + ': ' + fmtMoney(item.parsed.y)
+            }
+          }
+        }
+      }
+    });
+  }
+
+  Object.values(els).forEach(el => el.addEventListener('input', render));
+  render();
+</script>
+
+</body>
+</html>
