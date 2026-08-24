@@ -304,6 +304,42 @@
     padding:28px 24px 8px;
     margin-top:28px;
   }
+  .tax-toggle-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-top:16px;
+  }
+  .tax-toggle-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--paper-dim);
+  }
+  .tax-toggle{
+    display:inline-flex;
+    border:1px solid var(--line);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .toggle-btn{
+    background:var(--panel-2);
+    border:none;
+    color:var(--paper-dim);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    padding:9px 16px;
+    cursor:pointer;
+    transition:background 0.2s ease, color 0.2s ease;
+  }
+  .toggle-btn + .toggle-btn{ border-left:1px solid var(--line); }
+  .toggle-btn.active{
+    background:var(--gold);
+    color:var(--bg);
+  }
+  .toggle-btn:hover:not(.active){ color:var(--paper); }
   .tax-disclaimer{
     font-size:0.76rem;
     color:var(--paper-dim);
@@ -342,9 +378,11 @@
     border-bottom:1px solid var(--line);
   }
   thead th:first-child, tbody td:first-child{ text-align:left; }
+  thead th.col-age, tbody td.age{ width:5%; }
   thead th.col-fv, tbody td.fv{ width:12%; }
   thead th.col-pct, tbody td.pct{ width:9%; }
   thead th.col-tax, tbody td.tax{ width:13%; }
+  thead th.col-net, tbody td.net{ width:13%; }
   tbody td{
     text-align:right;
     padding:9px 14px;
@@ -358,6 +396,7 @@
   tbody td.fv{ color:var(--gold); }
   tbody td.pct{ color:var(--paper-dim); }
   tbody td.tax{ color:var(--terracotta, #C77D3B); }
+  tbody td.net{ color:var(--paper); font-weight:500; }
 
 </style>
 
@@ -536,18 +575,29 @@
     <div class="table-wrap">
       <div class="chart-title">Year-by-year contribution detail</div>
       <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement. % of pot = that year's future value as a share of all contribution future values combined.</div>
+
+      <div class="tax-toggle-row">
+        <span class="tax-toggle-label">Savings contribution is:</span>
+        <div class="tax-toggle" role="tablist">
+          <button type="button" class="toggle-btn active" id="toggle-pretax" role="tab" aria-selected="true">Pre-tax (Traditional)</button>
+          <button type="button" class="toggle-btn" id="toggle-roth" role="tab" aria-selected="false">After-tax (Roth)</button>
+        </div>
+      </div>
+
       <div class="tax-disclaimer">
-        Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, pre-tax retirement treatment, credits, and other deductions — not tax advice.
+        Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, credits, and other deductions — not tax advice.
+        Pre-tax (Traditional) reduces that year's taxable income by the savings amount before computing tax, matching a traditional 401(k)/IRA. After-tax (Roth) taxes the full salary and contributes what's left after tax, matching a Roth account.
       </div>
       <div class="table-scroll">
         <table id="year-table">
           <thead>
             <tr>
-              <th>Age</th>
+              <th class="col-age">Age</th>
               <th>Salary</th>
               <th class="col-tax">Federal tax (est.)</th>
               <th>Savings %</th>
               <th>Savings amount</th>
+              <th class="col-net">Net take-home</th>
               <th class="col-fv">Future value</th>
               <th class="col-pct">% of pot</th>
             </tr>
@@ -561,7 +611,7 @@
 </div>
 
 <footer>
-  Estimates only — assumes constant annual rates, ignores taxes, fees, and inflation. Not financial advice.
+  Estimates only — assumes constant annual rates and ignores fees. Federal tax is a simplified single-filer estimate; see the note above the table for details. Not financial advice.
 </footer>
 
 <script>
@@ -714,7 +764,11 @@
       const contributionFutureValue = contribution * Math.pow(1 + returnRate, yearsToRetirement);
 
       const yearsFromNow = ageThisYear - age;
-      const federalTax = estimateFederalTax(salary, yearsFromNow, inflation);
+      // Pre-tax (Traditional): the contribution reduces taxable income before tax is computed.
+      // After-tax (Roth): tax is computed on the full salary, then the contribution comes out of what's left.
+      const taxableSalary = taxTreatment === 'pretax' ? Math.max(salary - contribution, 0) : salary;
+      const federalTax = estimateFederalTax(taxableSalary, yearsFromNow, inflation);
+      const netTakeHome = salary - federalTax - contribution;
 
       yearRows.push({
         age: ageThisYear,
@@ -722,7 +776,8 @@
         rate: rateThisYear,
         contribution: contribution,
         futureValue: contributionFutureValue,
-        federalTax: federalTax
+        federalTax: federalTax,
+        netTakeHome: netTakeHome
       });
 
       salary = salary * (1 + growthRateThisYear);
@@ -758,6 +813,7 @@
 
   let chart;
   let chartPct;
+  let taxTreatment = 'pretax'; // 'pretax' (Traditional) or 'roth' (after-tax)
   function render(){
     valEls.age.textContent = els.age.value;
     valEls.retireAge.textContent = els.retireAge.value;
@@ -809,11 +865,12 @@
     const tbody = document.getElementById('year-table-body');
     tbody.innerHTML = data.yearRows.map(row => (
       '<tr>' +
-        '<td>' + row.age + '</td>' +
+        '<td class="age">' + row.age + '</td>' +
         '<td>' + fmtMoney(row.salary) + '</td>' +
         '<td class="tax">' + fmtMoney(row.federalTax) + '</td>' +
         '<td>' + (row.rate * 100).toFixed(1) + '%</td>' +
         '<td>' + fmtMoney(row.contribution) + '</td>' +
+        '<td class="net">' + fmtMoney(row.netTakeHome) + '</td>' +
         '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
         '<td class="pct">' + row.pctOfPot.toFixed(1) + '%</td>' +
       '</tr>'
@@ -988,6 +1045,22 @@
   tabBalance.addEventListener('click', () => activateTab('balance'));
   tabPct.addEventListener('click', () => activateTab('pct'));
 
+  // --- Pre-tax / Roth toggle ---
+  const togglePretax = document.getElementById('toggle-pretax');
+  const toggleRoth = document.getElementById('toggle-roth');
+
+  function setTaxTreatment(value){
+    taxTreatment = value;
+    togglePretax.classList.toggle('active', value === 'pretax');
+    toggleRoth.classList.toggle('active', value === 'roth');
+    togglePretax.setAttribute('aria-selected', value === 'pretax');
+    toggleRoth.setAttribute('aria-selected', value === 'roth');
+    render();
+  }
+
+  togglePretax.addEventListener('click', () => setTaxTreatment('pretax'));
+  toggleRoth.addEventListener('click', () => setTaxTreatment('roth'));
+
   const DEFAULTS = {
     age: '22',
     retireAge: '60',
@@ -1002,12 +1075,13 @@
     lateGrowth: '0',
     returnRate: '4',
   };
+  const DEFAULT_TAX_TREATMENT = 'pretax';
 
   document.getElementById('reset-btn').addEventListener('click', () => {
     Object.keys(DEFAULTS).forEach(key => {
       if (els[key]) els[key].value = DEFAULTS[key];
     });
-    render();
+    setTaxTreatment(DEFAULT_TAX_TREATMENT);
   });
 
   Object.values(els).forEach(el => el.addEventListener('input', render));
