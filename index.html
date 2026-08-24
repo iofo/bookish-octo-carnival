@@ -319,6 +319,14 @@
     border-left:3px solid var(--gold);
     padding:16px 20px;
   }
+  .equalize-label{ margin-left:10px; }
+  .equalize-hint{
+    font-size:0.76rem;
+    color:var(--paper-dim);
+    line-height:1.5;
+    flex-basis:100%;
+    margin-top:2px;
+  }
   .tax-toggle-label{
     font-family:'IBM Plex Mono', monospace;
     font-size:0.72rem;
@@ -525,6 +533,12 @@
         <button type="button" class="toggle-btn active" id="toggle-pretax" role="tab" aria-selected="true">Pre-tax (Traditional)</button>
         <button type="button" class="toggle-btn" id="toggle-roth" role="tab" aria-selected="false">After-tax (Roth)</button>
       </div>
+      <span class="tax-toggle-label equalize-label">Equalize net pay:</span>
+      <div class="tax-toggle" role="tablist">
+        <button type="button" class="toggle-btn active" id="toggle-equalize-off" role="tab" aria-selected="true">Off</button>
+        <button type="button" class="toggle-btn" id="toggle-equalize-on" role="tab" aria-selected="false">On</button>
+      </div>
+      <span class="equalize-hint" id="equalize-hint">Same dollar contribution either way — Roth costs more net pay since it isn't tax-deductible.</span>
     </div>
 
     <div class="stats-row">
@@ -597,6 +611,7 @@
         Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, credits, and other deductions — not tax advice.
         Pre-tax (Traditional) reduces that year's taxable income by the savings amount before computing tax, matching a traditional 401(k)/IRA. After-tax (Roth) taxes the full salary and contributes what's left after tax, matching a Roth account.
         FICA (est.) is 2026 Social Security (6.2% up to the $184,500 wage base) plus Medicare (1.45–2.35%), applied to gross wages regardless of the pre-tax/Roth toggle. Both Federal tax and FICA are subtracted to get net take-home; FICA never affects any other figure on the page.
+        Equalize net pay (Roth only): reduces the Roth contribution amount so that year's net take-home matches what Pre-tax would give at the same savings-rate schedule. The Savings % and Savings amount columns reflect this adjusted, smaller contribution — which is why Roth balances often end up lower than Traditional ones for the "same" paycheck impact.
       </div>
       <div class="table-scroll">
         <table id="year-table">
@@ -769,8 +784,35 @@
       const ageThisYear = age + y - 1;
       const rateThisYear = savingsRateForAge(ageThisYear, earlyStart, earlyIncrement, lateIncrement, lateCap);
       const growthRateThisYear = salaryGrowthForAge(ageThisYear, earlyGrowth, lateGrowth);
+      const yearsFromNow = ageThisYear - age;
 
-      const contribution = salary * rateThisYear;
+      // Nominal contribution = the savings-rate schedule applied to salary. This is
+      // always the Pre-tax (Traditional) contribution amount and the reference point
+      // for the "Equalize net pay" toggle.
+      const nominalContribution = salary * rateThisYear;
+      const fica = estimateFicaTax(salary, yearsFromNow, inflation);
+      const taxPretaxRef = estimateFederalTax(Math.max(salary - nominalContribution, 0), yearsFromNow, inflation);
+      const taxRothRef = estimateFederalTax(salary, yearsFromNow, inflation);
+
+      let contribution, federalTax;
+      if (taxTreatment === 'pretax'){
+        contribution = nominalContribution;
+        federalTax = taxPretaxRef;
+      } else {
+        federalTax = taxRothRef; // Roth tax is always on full salary, independent of contribution amount.
+        if (equalizeNetPay){
+          // Solve the Roth contribution so net take-home matches what Pre-tax would
+          // give at the same nominal rate. Since Roth tax doesn't depend on the
+          // contribution amount, this has a direct closed-form solution:
+          // netPretax = salary - taxPretaxRef - fica - nominalContribution
+          // netRoth(C) = salary - taxRothRef - fica - C  =>  C = nominalContribution - (taxRothRef - taxPretaxRef)
+          const equalized = nominalContribution - (taxRothRef - taxPretaxRef);
+          contribution = Math.max(0, Math.min(equalized, salary));
+        } else {
+          contribution = nominalContribution; // same dollar amount as Pre-tax (current default behavior)
+        }
+      }
+      const actualRate = salary > 0 ? contribution / salary : 0;
 
       // Savings are actually deposited and compounded monthly: split the year's
       // contribution into 12 equal deposits and grow the balance at the
@@ -790,26 +832,21 @@
 
       finalYearSalary = salary;
       finalYearContribution = contribution;
-      finalYearRate = rateThisYear;
+      finalYearRate = actualRate;
 
       // Future value of this year's contribution alone, compounded at the
       // investment return rate for the remaining years until retirement.
       const yearsToRetirement = retireAge - ageThisYear;
       const contributionFutureValue = contribution * Math.pow(1 + returnRate, yearsToRetirement);
 
-      const yearsFromNow = ageThisYear - age;
-      // Pre-tax (Traditional): the contribution reduces taxable income before tax is computed.
-      // After-tax (Roth): tax is computed on the full salary, then the contribution comes out of what's left.
-      const taxableSalary = taxTreatment === 'pretax' ? Math.max(salary - contribution, 0) : salary;
-      const federalTax = estimateFederalTax(taxableSalary, yearsFromNow, inflation);
       // FICA is always on gross salary, unaffected by the pretax/Roth toggle.
-      const ficaTax = estimateFicaTax(salary, yearsFromNow, inflation);
+      const ficaTax = fica;
       const netTakeHome = salary - federalTax - ficaTax - contribution;
 
       yearRows.push({
         age: ageThisYear,
         salary: salary,
-        rate: rateThisYear,
+        rate: actualRate,
         contribution: contribution,
         futureValue: contributionFutureValue,
         federalTax: federalTax,
@@ -862,6 +899,7 @@
   let chart;
   let chartPct;
   let taxTreatment = 'pretax'; // 'pretax' (Traditional) or 'roth' (after-tax)
+  let equalizeNetPay = false; // when true, Roth contribution is solved to match Pre-tax net take-home
   function render(){
     valEls.age.textContent = els.age.value;
     valEls.retireAge.textContent = els.retireAge.value;
@@ -1119,6 +1157,26 @@
   togglePretax.addEventListener('click', () => setTaxTreatment('pretax'));
   toggleRoth.addEventListener('click', () => setTaxTreatment('roth'));
 
+  // --- Equalize net pay toggle ---
+  const toggleEqualizeOff = document.getElementById('toggle-equalize-off');
+  const toggleEqualizeOn = document.getElementById('toggle-equalize-on');
+  const equalizeHint = document.getElementById('equalize-hint');
+
+  function setEqualizeNetPay(value){
+    equalizeNetPay = value;
+    toggleEqualizeOff.classList.toggle('active', !value);
+    toggleEqualizeOn.classList.toggle('active', value);
+    toggleEqualizeOff.setAttribute('aria-selected', !value);
+    toggleEqualizeOn.setAttribute('aria-selected', value);
+    equalizeHint.textContent = value
+      ? 'Roth contribution is reduced so your net take-home pay matches Pre-tax at the same rate — the Traditional side never changes.'
+      : 'Same dollar contribution either way — Roth costs more net pay since it isn\'t tax-deductible.';
+    render();
+  }
+
+  toggleEqualizeOff.addEventListener('click', () => setEqualizeNetPay(false));
+  toggleEqualizeOn.addEventListener('click', () => setEqualizeNetPay(true));
+
   const DEFAULTS = {
     age: '22',
     retireAge: '60',
@@ -1134,12 +1192,14 @@
     returnRate: '4',
   };
   const DEFAULT_TAX_TREATMENT = 'pretax';
+  const DEFAULT_EQUALIZE_NET_PAY = false;
 
   document.getElementById('reset-btn').addEventListener('click', () => {
     Object.keys(DEFAULTS).forEach(key => {
       if (els[key]) els[key].value = DEFAULTS[key];
     });
     setTaxTreatment(DEFAULT_TAX_TREATMENT);
+    setEqualizeNetPay(DEFAULT_EQUALIZE_NET_PAY);
   });
 
   Object.values(els).forEach(el => el.addEventListener('input', render));
