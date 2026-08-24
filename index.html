@@ -216,6 +216,42 @@
     border-top:1px solid var(--line);
   }
 
+  .peak-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    padding:28px 28px;
+    margin-top:28px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:32px;
+    border-left:3px solid var(--gold);
+  }
+  .peak-label{ flex:1 1 auto; max-width:560px; }
+  .peak-figures{
+    display:flex;
+    gap:36px;
+    flex-shrink:0;
+  }
+  .peak-stat .stat-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--paper-dim);
+    margin-bottom:10px;
+  }
+  .peak-stat .stat-value{
+    font-family:'Newsreader', serif;
+    font-size:1.85rem;
+    font-weight:500;
+  }
+  .peak-stat .stat-value.gold{ color:var(--gold); }
+  @media (max-width:760px){
+    .peak-panel{ flex-direction:column; align-items:flex-start; }
+    .peak-figures{ gap:28px; }
+  }
+
   .table-wrap{
     background:var(--panel);
     border:1px solid var(--line);
@@ -372,6 +408,23 @@
       </div>
     </div>
 
+    <div class="peak-panel">
+      <div class="peak-label">
+        <div class="chart-title">Peak contribution year</div>
+        <div class="chart-sub">The single year whose savings amount compounds to the largest future value by retirement — earlier contributions have more years to grow, so this is rarely your last year of saving.</div>
+      </div>
+      <div class="peak-figures">
+        <div class="peak-stat">
+          <div class="stat-label">Peak future value</div>
+          <div class="stat-value gold" id="peak-fv">—</div>
+        </div>
+        <div class="peak-stat">
+          <div class="stat-label">Age it occurs</div>
+          <div class="stat-value" id="peak-age">—</div>
+        </div>
+      </div>
+    </div>
+
     <div class="table-wrap">
       <div class="chart-title">Year-by-year contribution detail</div>
       <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement.</div>
@@ -516,8 +569,13 @@
     const finalTakeHome = finalYearSalary - finalYearContribution;
     const swrPctOfFinalSalary = finalTakeHome > 0 ? (swrIncome / finalTakeHome) * 100 : null;
 
+    let peakRow = null;
+    for (const row of yearRows){
+      if (!peakRow || row.futureValue > peakRow.futureValue) peakRow = row;
+    }
+
     return {
-      ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows,
+      ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows, peakRow,
       finalYearSalary, finalYearContribution, finalYearRate, finalTakeHome, swrIncome, swrPctOfFinalSalary
     };
   }
@@ -562,6 +620,14 @@
         '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
       '</tr>'
     )).join('');
+
+    if (data.peakRow){
+      document.getElementById('peak-fv').textContent = fmtMoney(data.peakRow.futureValue);
+      document.getElementById('peak-age').textContent = data.peakRow.age;
+    } else {
+      document.getElementById('peak-fv').textContent = '—';
+      document.getElementById('peak-age').textContent = '—';
+    }
 
 
     const ctx = document.getElementById('chart').getContext('2d');
