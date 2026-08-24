@@ -304,14 +304,25 @@
     padding:28px 24px 8px;
     margin-top:28px;
   }
+  .tax-disclaimer{
+    font-size:0.76rem;
+    color:var(--paper-dim);
+    line-height:1.6;
+    background:var(--panel-2);
+    border-left:2px solid var(--line);
+    padding:12px 16px;
+    margin-top:14px;
+  }
   .table-scroll{
     max-height:420px;
     overflow-y:auto;
+    overflow-x:auto;
     margin-top:20px;
     border-top:1px solid var(--line);
   }
   table{
     width:100%;
+    min-width:680px;
     table-layout:fixed;
     border-collapse:collapse;
     font-family:'IBM Plex Mono', monospace;
@@ -333,6 +344,7 @@
   thead th:first-child, tbody td:first-child{ text-align:left; }
   thead th.col-fv, tbody td.fv{ width:12%; }
   thead th.col-pct, tbody td.pct{ width:9%; }
+  thead th.col-tax, tbody td.tax{ width:13%; }
   tbody td{
     text-align:right;
     padding:9px 14px;
@@ -345,6 +357,7 @@
   tbody tr:hover{ background:var(--panel-2); }
   tbody td.fv{ color:var(--gold); }
   tbody td.pct{ color:var(--paper-dim); }
+  tbody td.tax{ color:var(--terracotta, #C77D3B); }
 
 </style>
 
@@ -523,12 +536,16 @@
     <div class="table-wrap">
       <div class="chart-title">Year-by-year contribution detail</div>
       <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement. % of pot = that year's future value as a share of all contribution future values combined.</div>
+      <div class="tax-disclaimer">
+        Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, pre-tax retirement treatment, credits, and other deductions — not tax advice.
+      </div>
       <div class="table-scroll">
         <table id="year-table">
           <thead>
             <tr>
               <th>Age</th>
               <th>Salary</th>
+              <th class="col-tax">Federal tax (est.)</th>
               <th>Savings %</th>
               <th>Savings amount</th>
               <th class="col-fv">Future value</th>
@@ -593,6 +610,39 @@
 
   function salaryGrowthForAge(age, earlyGrowth, lateGrowth){
     return age < PHASE_SPLIT ? earlyGrowth : lateGrowth;
+  }
+
+  // 2026 US federal income tax, single filer (IRS Rev. Proc. 2025-32).
+  // Estimate only — see disclaimer in the table caption.
+  const FEDERAL_STANDARD_DEDUCTION_2026_SINGLE = 16100;
+  const FEDERAL_BRACKETS_2026_SINGLE = [
+    { rate: 0.10, upTo: 12400 },
+    { rate: 0.12, upTo: 50400 },
+    { rate: 0.22, upTo: 105700 },
+    { rate: 0.24, upTo: 201775 },
+    { rate: 0.32, upTo: 256225 },
+    { rate: 0.35, upTo: 640600 },
+    { rate: 0.37, upTo: Infinity },
+  ];
+
+  // Bracket thresholds and the standard deduction are assumed to rise with
+  // inflation each year (as the IRS does in practice); the rates themselves
+  // are held fixed at their 2026 levels for the whole projection.
+  function estimateFederalTax(grossSalary, yearsFromNow, inflationRate){
+    const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
+    const deduction = FEDERAL_STANDARD_DEDUCTION_2026_SINGLE * inflationFactor;
+    const taxableIncome = Math.max(grossSalary - deduction, 0);
+
+    let tax = 0;
+    let prevCap = 0;
+    for (const bracket of FEDERAL_BRACKETS_2026_SINGLE){
+      const cap = bracket.upTo === Infinity ? Infinity : bracket.upTo * inflationFactor;
+      if (taxableIncome <= prevCap) break;
+      const amountInBracket = Math.min(taxableIncome, cap) - prevCap;
+      tax += amountInBracket * bracket.rate;
+      prevCap = cap;
+    }
+    return tax;
   }
 
   function project(){
@@ -663,12 +713,16 @@
       const yearsToRetirement = retireAge - ageThisYear;
       const contributionFutureValue = contribution * Math.pow(1 + returnRate, yearsToRetirement);
 
+      const yearsFromNow = ageThisYear - age;
+      const federalTax = estimateFederalTax(salary, yearsFromNow, inflation);
+
       yearRows.push({
         age: ageThisYear,
         salary: salary,
         rate: rateThisYear,
         contribution: contribution,
-        futureValue: contributionFutureValue
+        futureValue: contributionFutureValue,
+        federalTax: federalTax
       });
 
       salary = salary * (1 + growthRateThisYear);
@@ -757,6 +811,7 @@
       '<tr>' +
         '<td>' + row.age + '</td>' +
         '<td>' + fmtMoney(row.salary) + '</td>' +
+        '<td class="tax">' + fmtMoney(row.federalTax) + '</td>' +
         '<td>' + (row.rate * 100).toFixed(1) + '%</td>' +
         '<td>' + fmtMoney(row.contribution) + '</td>' +
         '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
