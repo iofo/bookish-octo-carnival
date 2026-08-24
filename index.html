@@ -250,17 +250,46 @@
     </div>
 
     <hr class="divider">
-    <div class="section-label">Assumptions</div>
+    <div class="section-label">Early career (22–35)</div>
+    <p style="font-size:0.78rem;color:var(--paper-dim);margin:-10px 0 20px;line-height:1.5;">
+      Savings rate rises each year starting at 22. From 35 on, it switches to the late-career increment below, up to the cap.
+    </p>
 
     <div class="field">
-      <label>Savings rate <span class="val" id="val-savingsRate">12%</span></label>
-      <input type="range" id="savingsRate" min="0" max="40" value="12" step="0.5">
+      <label>Starting savings rate <span class="val" id="val-earlyStartRate">5%</span></label>
+      <input type="range" id="earlyStartRate" min="0" max="40" value="5" step="0.5">
     </div>
 
     <div class="field">
-      <label>Salary growth rate <span class="val" id="val-growthRate">3%</span></label>
-      <input type="range" id="growthRate" min="0" max="10" value="3" step="0.25">
+      <label>Savings rate increase / yr <span class="val" id="val-earlyIncrement">1%</span></label>
+      <input type="range" id="earlyIncrement" min="0" max="5" value="1" step="0.25">
     </div>
+
+    <div class="field">
+      <label>Salary growth rate <span class="val" id="val-earlyGrowth">3%</span></label>
+      <input type="range" id="earlyGrowth" min="0" max="10" value="3" step="0.25">
+    </div>
+
+    <hr class="divider">
+    <div class="section-label">Late career (35+)</div>
+
+    <div class="field">
+      <label>Savings rate increase / yr <span class="val" id="val-lateIncrement">2%</span></label>
+      <input type="range" id="lateIncrement" min="0" max="5" value="2" step="0.25">
+    </div>
+
+    <div class="field">
+      <label>Savings rate cap <span class="val" id="val-lateCap">25%</span></label>
+      <input type="range" id="lateCap" min="10" max="50" value="25" step="1">
+    </div>
+
+    <div class="field">
+      <label>Salary growth rate <span class="val" id="val-lateGrowth">2%</span></label>
+      <input type="range" id="lateGrowth" min="0" max="10" value="2" step="0.25">
+    </div>
+
+    <hr class="divider">
+    <div class="section-label">Investment assumption</div>
 
     <div class="field">
       <label>Expected investment return <span class="val" id="val-returnRate">7%</span></label>
@@ -314,19 +343,45 @@
     retireAge: document.getElementById('retireAge'),
     salary: document.getElementById('salary'),
     balance: document.getElementById('balance'),
-    savingsRate: document.getElementById('savingsRate'),
-    growthRate: document.getElementById('growthRate'),
+    earlyStartRate: document.getElementById('earlyStartRate'),
+    earlyIncrement: document.getElementById('earlyIncrement'),
+    earlyGrowth: document.getElementById('earlyGrowth'),
+    lateIncrement: document.getElementById('lateIncrement'),
+    lateCap: document.getElementById('lateCap'),
+    lateGrowth: document.getElementById('lateGrowth'),
     returnRate: document.getElementById('returnRate'),
   };
   const valEls = {
     age: document.getElementById('val-age'),
     retireAge: document.getElementById('val-retireAge'),
-    savingsRate: document.getElementById('val-savingsRate'),
-    growthRate: document.getElementById('val-growthRate'),
+    earlyStartRate: document.getElementById('val-earlyStartRate'),
+    earlyIncrement: document.getElementById('val-earlyIncrement'),
+    earlyGrowth: document.getElementById('val-earlyGrowth'),
+    lateIncrement: document.getElementById('val-lateIncrement'),
+    lateCap: document.getElementById('val-lateCap'),
+    lateGrowth: document.getElementById('val-lateGrowth'),
     returnRate: document.getElementById('val-returnRate'),
   };
 
   const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('en-US');
+  const PHASE_SPLIT = 35;
+  const PHASE_START = 22;
+
+  // Savings rate as a function of age: rises 1%/yr (default) from a starting
+  // rate at age 22 through age 35, then rises 2%/yr (default) after 35, capped.
+  function savingsRateForAge(age, earlyStart, earlyIncrement, lateIncrement, lateCap){
+    const clampedAge = Math.max(age, PHASE_START);
+    if (clampedAge < PHASE_SPLIT){
+      return earlyStart + (clampedAge - PHASE_START) * earlyIncrement;
+    }
+    const rateAtSplit = earlyStart + (PHASE_SPLIT - PHASE_START) * earlyIncrement;
+    const lateRate = rateAtSplit + (clampedAge - PHASE_SPLIT) * lateIncrement;
+    return Math.min(lateRate, lateCap);
+  }
+
+  function salaryGrowthForAge(age, earlyGrowth, lateGrowth){
+    return age < PHASE_SPLIT ? earlyGrowth : lateGrowth;
+  }
 
   function project(){
     let age = parseInt(els.age.value);
@@ -334,8 +389,12 @@
     if (retireAge <= age) retireAge = age + 1;
     const salary0 = parseFloat(els.salary.value) || 0;
     const balance0 = parseFloat(els.balance.value) || 0;
-    const savingsRate = parseFloat(els.savingsRate.value) / 100;
-    const growthRate = parseFloat(els.growthRate.value) / 100;
+    const earlyStart = parseFloat(els.earlyStartRate.value) / 100;
+    const earlyIncrement = parseFloat(els.earlyIncrement.value) / 100;
+    const earlyGrowth = parseFloat(els.earlyGrowth.value) / 100;
+    const lateIncrement = parseFloat(els.lateIncrement.value) / 100;
+    const lateCap = parseFloat(els.lateCap.value) / 100;
+    const lateGrowth = parseFloat(els.lateGrowth.value) / 100;
     const returnRate = parseFloat(els.returnRate.value) / 100;
 
     const years = retireAge - age;
@@ -350,9 +409,14 @@
     let totalGrowth = 0;
     let finalYearSalary = salary0;
     let finalYearContribution = 0;
+    let finalYearRate = 0;
 
     for (let y = 1; y <= years; y++){
-      const contribution = salary * savingsRate;
+      const ageThisYear = age + y - 1;
+      const rateThisYear = savingsRateForAge(ageThisYear, earlyStart, earlyIncrement, lateIncrement, lateCap);
+      const growthRateThisYear = salaryGrowthForAge(ageThisYear, earlyGrowth, lateGrowth);
+
+      const contribution = salary * rateThisYear;
       const growthThisYear = balance * returnRate;
       balance = balance + growthThisYear + contribution;
       totalContrib += contribution;
@@ -360,8 +424,9 @@
 
       finalYearSalary = salary;
       finalYearContribution = contribution;
+      finalYearRate = rateThisYear;
 
-      salary = salary * (1 + growthRate);
+      salary = salary * (1 + growthRateThisYear);
 
       ages.push(age + y);
       balances.push(balance);
@@ -378,7 +443,7 @@
 
     return {
       ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance,
-      finalYearSalary, finalYearContribution, finalTakeHome, swrIncome, swrPctOfFinalSalary
+      finalYearSalary, finalYearContribution, finalYearRate, finalTakeHome, swrIncome, swrPctOfFinalSalary
     };
   }
 
@@ -386,8 +451,12 @@
   function render(){
     valEls.age.textContent = els.age.value;
     valEls.retireAge.textContent = els.retireAge.value;
-    valEls.savingsRate.textContent = els.savingsRate.value + '%';
-    valEls.growthRate.textContent = els.growthRate.value + '%';
+    valEls.earlyStartRate.textContent = els.earlyStartRate.value + '%';
+    valEls.earlyIncrement.textContent = els.earlyIncrement.value + '%';
+    valEls.earlyGrowth.textContent = els.earlyGrowth.value + '%';
+    valEls.lateIncrement.textContent = els.lateIncrement.value + '%';
+    valEls.lateCap.textContent = els.lateCap.value + '%';
+    valEls.lateGrowth.textContent = els.lateGrowth.value + '%';
     valEls.returnRate.textContent = els.returnRate.value + '%';
 
     const data = project();
@@ -400,7 +469,7 @@
       document.getElementById('stat-swr-pct').textContent = Math.round(data.swrPctOfFinalSalary) + '%';
       document.getElementById('stat-swr-detail').innerHTML =
         'Final salary: ' + fmtMoney(data.finalYearSalary) + '<br>' +
-        'Savings rate: ' + els.savingsRate.value + '% (' + fmtMoney(data.finalYearContribution) + ')<br>' +
+        'Savings rate: ' + (data.finalYearRate * 100).toFixed(1) + '% (' + fmtMoney(data.finalYearContribution) + ')<br>' +
         'Take-home: ' + fmtMoney(data.finalTakeHome) + '<br>' +
         '4% SWR income: ' + fmtMoney(data.swrIncome) + '/yr';
     } else {
