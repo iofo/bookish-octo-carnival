@@ -186,6 +186,32 @@
     font-size:1.2rem;
     margin-bottom:4px;
   }
+  .chart-tabs{
+    display:flex;
+    gap:4px;
+    margin-bottom:20px;
+    border-bottom:1px solid var(--line);
+  }
+  .chart-tab{
+    background:none;
+    border:none;
+    color:var(--paper-dim);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.76rem;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding:10px 4px 12px;
+    margin-right:24px;
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    transform:translateY(1px);
+    transition:color 0.2s ease, border-color 0.2s ease;
+  }
+  .chart-tab:hover{ color:var(--paper); }
+  .chart-tab.active{
+    color:var(--gold);
+    border-bottom-color:var(--gold);
+  }
   .chart-sub{
     font-size:0.84rem;
     color:var(--paper-dim);
@@ -413,14 +439,27 @@
     </div>
 
     <div class="chart-wrap">
-      <div class="chart-title">Balance over time</div>
-      <div class="chart-sub">Contributions vs. investment growth, stacked to show total projected balance by age.</div>
-      <div class="chart-canvas-holder">
-        <canvas id="chart"></canvas>
+      <div class="chart-tabs" role="tablist">
+        <button class="chart-tab active" id="tab-balance" data-target="balance" role="tab" aria-selected="true">Balance over time</button>
+        <button class="chart-tab" id="tab-pct" data-target="pct" role="tab" aria-selected="false">% of pot by age</button>
       </div>
-      <div class="legend-row">
-        <span><span class="dot" style="background:#4C8577"></span>Your contributions (cumulative)</span>
-        <span><span class="dot" style="background:#C9A227"></span>Investment growth (cumulative)</span>
+
+      <div class="chart-pane" id="pane-balance">
+        <div class="chart-sub">Contributions vs. investment growth, stacked to show total projected balance by age.</div>
+        <div class="chart-canvas-holder">
+          <canvas id="chart"></canvas>
+        </div>
+        <div class="legend-row">
+          <span><span class="dot" style="background:#4C8577"></span>Your contributions (cumulative)</span>
+          <span><span class="dot" style="background:#C9A227"></span>Investment growth (cumulative)</span>
+        </div>
+      </div>
+
+      <div class="chart-pane" id="pane-pct" style="display:none;">
+        <div class="chart-sub">Each year's contribution future value as a percent of the total retirement pot built from contributions — shows which years matter most.</div>
+        <div class="chart-canvas-holder">
+          <canvas id="chart-pct"></canvas>
+        </div>
       </div>
     </div>
 
@@ -624,6 +663,7 @@
   }
 
   let chart;
+  let chartPct;
   function render(){
     valEls.age.textContent = els.age.value;
     valEls.retireAge.textContent = els.retireAge.value;
@@ -674,8 +714,7 @@
       document.getElementById('peak-age').textContent = '—';
     }
 
-
-    const ctx = document.getElementById('chart').getContext('2d');
+    // --- Balance-over-time chart ---
     const startBalance = parseFloat(els.balance.value) || 0;
     const contribSeries = data.cumContrib.map(c => c + startBalance);
     const growthSeries = data.cumGrowth;
@@ -685,75 +724,156 @@
       chart.data.datasets[0].data = contribSeries;
       chart.data.datasets[1].data = growthSeries;
       chart.update();
-      return;
-    }
-
-    chart = new Chart(ctx, {
-      type:'line',
-      data:{
-        labels:data.ages,
-        datasets:[
-          {
-            label:'Contributions',
-            data:contribSeries,
-            borderColor:'#4C8577',
-            backgroundColor:'rgba(76,133,119,0.35)',
-            fill:true,
-            stack:'stack1',
-            tension:0.25,
-            pointRadius:0,
-            borderWidth:2,
-          },
-          {
-            label:'Investment growth',
-            data:growthSeries,
-            borderColor:'#C9A227',
-            backgroundColor:'rgba(201,162,39,0.35)',
-            fill:true,
-            stack:'stack1',
-            tension:0.25,
-            pointRadius:0,
-            borderWidth:2,
-          }
-        ]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        interaction:{ mode:'index', intersect:false },
-        scales:{
-          x:{
-            title:{ display:true, text:'Age', color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:11 } },
-            ticks:{ color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:10 } },
-            grid:{ color:'#212D48' }
-          },
-          y:{
-            stacked:true,
-            ticks:{
-              color:'#9AA0AF',
-              font:{ family:'IBM Plex Mono', size:10 },
-              callback:(v)=> '$' + (v/1000).toFixed(0) + 'k'
+    } else {
+      const ctx = document.getElementById('chart').getContext('2d');
+      chart = new Chart(ctx, {
+        type:'line',
+        data:{
+          labels:data.ages,
+          datasets:[
+            {
+              label:'Contributions',
+              data:contribSeries,
+              borderColor:'#4C8577',
+              backgroundColor:'rgba(76,133,119,0.35)',
+              fill:true,
+              stack:'stack1',
+              tension:0.25,
+              pointRadius:0,
+              borderWidth:2,
             },
-            grid:{ color:'#212D48' }
-          }
+            {
+              label:'Investment growth',
+              data:growthSeries,
+              borderColor:'#C9A227',
+              backgroundColor:'rgba(201,162,39,0.35)',
+              fill:true,
+              stack:'stack1',
+              tension:0.25,
+              pointRadius:0,
+              borderWidth:2,
+            }
+          ]
         },
-        plugins:{
-          legend:{ display:false },
-          tooltip:{
-            backgroundColor:'#1C2740',
-            borderColor:'#2A3550',
-            borderWidth:1,
-            titleFont:{ family:'IBM Plex Mono', size:12 },
-            bodyFont:{ family:'IBM Plex Mono', size:12 },
-            callbacks:{
-              title: (items) => 'Age ' + items[0].label,
-              label: (item) => item.dataset.label + ': ' + fmtMoney(item.parsed.y)
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          interaction:{ mode:'index', intersect:false },
+          scales:{
+            x:{
+              title:{ display:true, text:'Age', color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:11 } },
+              ticks:{ color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:10 } },
+              grid:{ color:'#212D48' }
+            },
+            y:{
+              stacked:true,
+              ticks:{
+                color:'#9AA0AF',
+                font:{ family:'IBM Plex Mono', size:10 },
+                callback:(v)=> '$' + (v/1000).toFixed(0) + 'k'
+              },
+              grid:{ color:'#212D48' }
+            }
+          },
+          plugins:{
+            legend:{ display:false },
+            tooltip:{
+              backgroundColor:'#1C2740',
+              borderColor:'#2A3550',
+              borderWidth:1,
+              titleFont:{ family:'IBM Plex Mono', size:12 },
+              bodyFont:{ family:'IBM Plex Mono', size:12 },
+              callbacks:{
+                title: (items) => 'Age ' + items[0].label,
+                label: (item) => item.dataset.label + ': ' + fmtMoney(item.parsed.y)
+              }
             }
           }
         }
-      }
-    });
+      });
+    }
+
+    // --- % of pot by age chart ---
+    const pctAges = data.yearRows.map(r => r.age);
+    const pctValues = data.yearRows.map(r => r.pctOfPot);
+
+    if (chartPct){
+      chartPct.data.labels = pctAges;
+      chartPct.data.datasets[0].data = pctValues;
+      chartPct.update();
+    } else {
+      const ctxPct = document.getElementById('chart-pct').getContext('2d');
+      chartPct = new Chart(ctxPct, {
+        type:'bar',
+        data:{
+          labels:pctAges,
+          datasets:[
+            {
+              label:'% of pot',
+              data:pctValues,
+              backgroundColor:'#C9A227',
+              borderRadius:2,
+              maxBarThickness:18,
+            }
+          ]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          scales:{
+            x:{
+              title:{ display:true, text:'Age', color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:11 } },
+              ticks:{ color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:10 } },
+              grid:{ display:false }
+            },
+            y:{
+              ticks:{
+                color:'#9AA0AF',
+                font:{ family:'IBM Plex Mono', size:10 },
+                callback:(v)=> v.toFixed(1) + '%'
+              },
+              grid:{ color:'#212D48' }
+            }
+          },
+          plugins:{
+            legend:{ display:false },
+            tooltip:{
+              backgroundColor:'#1C2740',
+              borderColor:'#2A3550',
+              borderWidth:1,
+              titleFont:{ family:'IBM Plex Mono', size:12 },
+              bodyFont:{ family:'IBM Plex Mono', size:12 },
+              callbacks:{
+                title: (items) => 'Age ' + items[0].label,
+                label: (item) => 'Share of pot: ' + item.parsed.y.toFixed(1) + '%'
+              }
+            }
+          }
+        }
+      });
+    }
   }
+
+  // --- Chart tab switching ---
+  const tabBalance = document.getElementById('tab-balance');
+  const tabPct = document.getElementById('tab-pct');
+  const paneBalance = document.getElementById('pane-balance');
+  const panePct = document.getElementById('pane-pct');
+
+  function activateTab(target){
+    const isBalance = target === 'balance';
+    tabBalance.classList.toggle('active', isBalance);
+    tabPct.classList.toggle('active', !isBalance);
+    tabBalance.setAttribute('aria-selected', isBalance);
+    tabPct.setAttribute('aria-selected', !isBalance);
+    paneBalance.style.display = isBalance ? '' : 'none';
+    panePct.style.display = isBalance ? 'none' : '';
+    if (!isBalance && chartPct) chartPct.resize();
+    if (isBalance && chart) chart.resize();
+  }
+
+  tabBalance.addEventListener('click', () => activateTab('balance'));
+  tabPct.addEventListener('click', () => activateTab('pct'));
 
   Object.values(els).forEach(el => el.addEventListener('input', render));
   render();
