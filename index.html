@@ -170,6 +170,8 @@
     margin-bottom:36px;
   }
   .stats-row-3{ grid-template-columns:repeat(3,1fr); }
+  .stats-row-2{ grid-template-columns:repeat(2,1fr); }
+  @media (max-width:600px){ .stats-row-2{ grid-template-columns:1fr; } }
   @media (max-width:900px){ .stats-row{ grid-template-columns:repeat(2,1fr); } }
   @media (max-width:600px){ .stats-row{ grid-template-columns:1fr; } }
   .stat .stat-foot{
@@ -179,9 +181,6 @@
     margin-top:10px;
     line-height:1.7;
   }
-  .stat.wide{ grid-column:span 2; }
-  @media (max-width:900px){ .stat.wide{ grid-column:span 2; } }
-  @media (max-width:600px){ .stat.wide{ grid-column:span 1; } }
   .stat{
     background:var(--panel);
     padding:22px 24px;
@@ -306,6 +305,25 @@
     .peak-panel{ flex-direction:column; align-items:flex-start; }
     .peak-figures{ gap:28px; }
   }
+
+  .swr-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--gold);
+    padding:28px 28px;
+    margin-top:28px;
+  }
+  .swr-panel-header .chart-title{ margin-bottom:4px; }
+  .swr-panel-header .chart-sub{ margin-bottom:24px; }
+  .swr-figures{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+  }
+  .swr-figures .stat{ background:var(--panel-2); }
+  @media (max-width:600px){ .swr-figures{ grid-template-columns:1fr; } }
 
   .table-wrap{
     background:var(--panel);
@@ -518,21 +536,15 @@
   </div>
 
   <main>
-    <div class="stats-row stats-row-3">
+    <div class="stats-row stats-row-2">
       <div class="stat">
-        <div class="stat-label">Starting salary</div>
+        <div class="stat-label">Starting gross salary</div>
         <div class="stat-value" id="stat-start-salary">—</div>
       </div>
       <div class="stat teal">
-        <div class="stat-label">Final salary, in today's terms</div>
+        <div class="stat-label">Final gross salary, in today's terms</div>
         <div class="stat-value" id="stat-final-salary-real">—</div>
         <div class="stat-foot" id="stat-final-salary-nominal-foot">—</div>
-      </div>
-      <div class="stat gold">
-        <div class="stat-label">SWR retirement income, in today's terms</div>
-        <div class="stat-value" id="stat-swr-real">—</div>
-        <div class="stat-foot" id="stat-swr-real-foot">—</div>
-        <div class="stat-foot" id="stat-swr-real-tax-note">—</div>
       </div>
     </div>
 
@@ -550,7 +562,7 @@
       <span class="equalize-hint" id="equalize-hint">Same dollar contribution either way — Roth costs more net pay since it isn't tax-deductible.</span>
     </div>
 
-    <div class="stats-row">
+    <div class="stats-row stats-row-3">
       <div class="stat gold">
         <div class="stat-label">Projected balance at retirement</div>
         <div class="stat-value" id="stat-final">—</div>
@@ -563,10 +575,25 @@
         <div class="stat-label">Total investment growth</div>
         <div class="stat-value" id="stat-growth">—</div>
       </div>
-      <div class="stat gold wide">
-        <div class="stat-label">Retirement income at 4% SWR</div>
-        <div class="stat-value" id="stat-swr-pct">—</div>
-        <div class="stat-foot" id="stat-swr-detail">—</div>
+    </div>
+
+    <div class="swr-panel">
+      <div class="swr-panel-header">
+        <div class="chart-title">Retirement income at 4% SWR</div>
+        <div class="chart-sub">What your savings could pay you each year in retirement, applying a 4% safe withdrawal rate to your final balance. Figures below are net of estimated withdrawal tax, not gross.</div>
+      </div>
+      <div class="swr-figures">
+        <div class="stat gold">
+          <div class="stat-label">Net income, in today's terms</div>
+          <div class="stat-value" id="stat-swr-real">—</div>
+          <div class="stat-foot" id="stat-swr-real-foot">—</div>
+          <div class="stat-foot" id="stat-swr-real-tax-note">—</div>
+        </div>
+        <div class="stat teal">
+          <div class="stat-label">Replaces this % of final take-home pay</div>
+          <div class="stat-value" id="stat-swr-pct">—</div>
+          <div class="stat-foot" id="stat-swr-detail">—</div>
+        </div>
       </div>
     </div>
 
