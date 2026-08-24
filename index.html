@@ -143,6 +143,7 @@
     border:1px solid var(--line);
     margin-bottom:36px;
   }
+  .stats-row-3{ grid-template-columns:repeat(3,1fr); }
   @media (max-width:900px){ .stats-row{ grid-template-columns:repeat(2,1fr); } }
   @media (max-width:600px){ .stats-row{ grid-template-columns:1fr; } }
   .stat .stat-foot{
@@ -418,6 +419,23 @@
   </div>
 
   <main>
+    <div class="stats-row stats-row-3">
+      <div class="stat">
+        <div class="stat-label">Starting salary</div>
+        <div class="stat-value" id="stat-start-salary">—</div>
+      </div>
+      <div class="stat teal">
+        <div class="stat-label">Final salary, in today's terms</div>
+        <div class="stat-value" id="stat-final-salary-real">—</div>
+        <div class="stat-foot" id="stat-final-salary-nominal-foot">—</div>
+      </div>
+      <div class="stat gold">
+        <div class="stat-label">SWR retirement income, in today's terms</div>
+        <div class="stat-value" id="stat-swr-real">—</div>
+        <div class="stat-foot" id="stat-swr-real-foot">—</div>
+      </div>
+    </div>
+
     <div class="stats-row">
       <div class="stat gold">
         <div class="stat-label">Projected balance at retirement</div>
@@ -677,6 +695,24 @@
     valEls.returnRate.textContent = els.returnRate.value + '%';
 
     const data = project();
+
+    const inflationRate = parseFloat(els.inflation.value) / 100;
+    const currentAge = parseInt(els.age.value);
+    const retireAgeVal = parseInt(els.retireAge.value);
+    const yearsToRetirement = Math.max(retireAgeVal - currentAge, 0);
+    const finalSalaryAge = retireAgeVal - 1;
+    const yearsElapsedFinalSalary = Math.max(finalSalaryAge - currentAge, 0);
+
+    const realFinalSalary = data.finalYearSalary / Math.pow(1 + inflationRate, yearsElapsedFinalSalary);
+    const realSwrIncome = data.swrIncome / Math.pow(1 + inflationRate, yearsToRetirement);
+
+    document.getElementById('stat-start-salary').textContent = fmtMoney(parseFloat(els.salary.value) || 0);
+    document.getElementById('stat-final-salary-real').textContent = fmtMoney(realFinalSalary);
+    document.getElementById('stat-final-salary-nominal-foot').textContent =
+      'Nominal at age ' + finalSalaryAge + ': ' + fmtMoney(data.finalYearSalary);
+    document.getElementById('stat-swr-real').textContent = fmtMoney(realSwrIncome) + '/yr';
+    document.getElementById('stat-swr-real-foot').textContent =
+      'Nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncome) + '/yr';
 
     document.getElementById('stat-final').textContent = fmtMoney(data.final);
     document.getElementById('stat-contrib').textContent = fmtMoney(data.totalContrib + parseFloat(els.balance.value || 0));
