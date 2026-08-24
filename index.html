@@ -131,6 +131,25 @@
     margin-bottom:20px;
   }
 
+  .btn-reset{
+    width:100%;
+    background:none;
+    border:1px solid var(--line);
+    color:var(--paper-dim);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.8rem;
+    letter-spacing:0.04em;
+    padding:12px 16px;
+    border-radius:2px;
+    cursor:pointer;
+    transition:border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  }
+  .btn-reset:hover{
+    border-color:var(--gold);
+    color:var(--paper);
+    background:var(--panel-2);
+  }
+
   /* ---------- MAIN ---------- */
   main{ padding:40px; }
   @media (max-width:600px){ main{ padding:24px; } }
@@ -343,13 +362,13 @@
     <div class="section-label">Where you stand</div>
 
     <div class="field">
-      <label>Current age <span class="val" id="val-age">30</span></label>
-      <input type="range" id="age" min="18" max="65" value="30" step="1">
+      <label>Current age <span class="val" id="val-age">22</span></label>
+      <input type="range" id="age" min="18" max="65" value="22" step="1">
     </div>
 
     <div class="field">
-      <label>Retirement age <span class="val" id="val-retireAge">65</span></label>
-      <input type="range" id="retireAge" min="45" max="75" value="65" step="1">
+      <label>Retirement age <span class="val" id="val-retireAge">60</span></label>
+      <input type="range" id="retireAge" min="45" max="75" value="60" step="1">
     </div>
 
     <div class="field">
@@ -413,9 +432,12 @@
     <div class="section-label">Investment assumption</div>
 
     <div class="field">
-      <label>Return over inflation <span class="val" id="val-returnRate">7%</span></label>
-      <input type="range" id="returnRate" min="0" max="12" value="7" step="0.25">
+      <label>Return over inflation <span class="val" id="val-returnRate">4%</span></label>
+      <input type="range" id="returnRate" min="0" max="12" value="4" step="0.25">
     </div>
+
+    <hr class="divider">
+    <button type="button" class="btn-reset" id="reset-btn">Reset to defaults</button>
   </div>
 
   <main>
@@ -910,6 +932,28 @@
 
   tabBalance.addEventListener('click', () => activateTab('balance'));
   tabPct.addEventListener('click', () => activateTab('pct'));
+
+  const DEFAULTS = {
+    age: '22',
+    retireAge: '60',
+    salary: '75000',
+    balance: '20000',
+    inflation: '3',
+    earlyStartRate: '5',
+    earlyIncrement: '1',
+    earlyGrowth: '1',
+    lateIncrement: '2',
+    lateCap: '25',
+    lateGrowth: '0',
+    returnRate: '4',
+  };
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    Object.keys(DEFAULTS).forEach(key => {
+      if (els[key]) els[key].value = DEFAULTS[key];
+    });
+    render();
+  });
 
   Object.values(els).forEach(el => el.addEventListener('input', render));
   render();
