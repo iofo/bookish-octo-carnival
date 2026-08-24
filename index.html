@@ -16,6 +16,7 @@
     --paper-dim:#9AA0AF;
     --gold:#C9A227;
     --teal:#4C8577;
+    --terracotta:#C77D3B;
     --line:#2A3550;
     --line-soft:#212D48;
   }
@@ -129,6 +130,12 @@
     text-transform:uppercase;
     color:var(--teal);
     margin-bottom:20px;
+  }
+  .section-help-text{
+    font-size:0.78rem;
+    color:var(--paper-dim);
+    margin:-10px 0 20px;
+    line-height:1.5;
   }
 
   .btn-reset{
@@ -254,6 +261,8 @@
     border-radius:50%;
     margin-right:7px;
   }
+  .legend-row .dot-teal{ background:var(--teal); }
+  .legend-row .dot-gold{ background:var(--gold); }
 
   footer{
     padding:24px 40px;
@@ -411,7 +420,7 @@
   tbody tr:hover{ background:var(--panel-2); }
   tbody td.fv{ color:var(--gold); }
   tbody td.pct{ color:var(--paper-dim); }
-  tbody td.tax{ color:var(--terracotta, #C77D3B); }
+  tbody td.tax{ color:var(--terracotta); }
   tbody td.net{ color:var(--paper); font-weight:500; }
 
 </style>
@@ -459,7 +468,7 @@
 
     <hr class="divider">
     <div class="section-label">Early career (22–35)</div>
-    <p style="font-size:0.78rem;color:var(--paper-dim);margin:-10px 0 20px;line-height:1.5;">
+    <p class="section-help-text">
       Savings rate rises each year starting at 22. From 35 on, it switches to the late-career increment below, up to the cap.
     </p>
 
@@ -573,8 +582,8 @@
           <canvas id="chart"></canvas>
         </div>
         <div class="legend-row">
-          <span><span class="dot" style="background:#4C8577"></span>Your contributions (cumulative)</span>
-          <span><span class="dot" style="background:#C9A227"></span>Investment growth (cumulative)</span>
+          <span><span class="dot dot-teal"></span>Your contributions (cumulative)</span>
+          <span><span class="dot dot-gold"></span>Investment growth (cumulative)</span>
         </div>
       </div>
 
@@ -641,6 +650,93 @@
 </footer>
 
 <script>
+  // =====================================================================
+  // CONSTANTS
+  // All business/numeric constants live here — the single source of truth
+  // for every hardcoded value used in the calculations below.
+  // =====================================================================
+
+  // Savings-rate schedule phase boundary (ages).
+  const PHASE_START = 22;
+  const PHASE_SPLIT = 35;
+
+  // Safe withdrawal rate applied to the final balance at retirement.
+  const SWR_RATE = 0.04;
+
+  const MONTHS_PER_YEAR = 12;
+
+  // 2026 US federal income tax, single filer (IRS Rev. Proc. 2025-32).
+  // Estimate only — see the disclaimer rendered above the table.
+  const FEDERAL_STANDARD_DEDUCTION_2026_SINGLE = 16100;
+  const FEDERAL_BRACKETS_2026_SINGLE = [
+    { rate: 0.10, upTo: 12400 },
+    { rate: 0.12, upTo: 50400 },
+    { rate: 0.22, upTo: 105700 },
+    { rate: 0.24, upTo: 201775 },
+    { rate: 0.32, upTo: 256225 },
+    { rate: 0.35, upTo: 640600 },
+    { rate: 0.37, upTo: Infinity },
+  ];
+
+  // FICA (Social Security + Medicare), 2026 employee-side rates. Applies to
+  // gross wages regardless of pre-tax/Roth treatment — 401(k)/IRA contributions
+  // reduce federal taxable income but not the FICA wage base. Used only to make
+  // the table's net take-home figure more accurate; it never affects the
+  // "Federal tax" column or any other stat on the page.
+  const FICA_SS_RATE = 0.062;
+  const FICA_MEDICARE_RATE = 0.0145;
+  const FICA_ADDL_MEDICARE_RATE = 0.009;
+  const FICA_SS_WAGE_BASE_2026 = 184500;
+  const FICA_ADDL_MEDICARE_THRESHOLD_2026 = 200000; // single filer
+
+  // Tax treatment options for the pre-tax/Roth toggle.
+  const TAX_TREATMENT_PRETAX = 'pretax';
+  const TAX_TREATMENT_ROTH = 'roth';
+
+  // Colors read once from the CSS custom properties in :root, so Chart.js
+  // (which needs literal color strings, not CSS vars) never duplicates a
+  // hex value that's already defined in the stylesheet.
+  const rootStyle = getComputedStyle(document.documentElement);
+  const readCssVar = (name) => rootStyle.getPropertyValue(name).trim();
+  const hexToRgba = (hex, alpha) => {
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  };
+  const CHART_FILL_ALPHA = 0.35;
+  const THEME = {
+    teal: readCssVar('--teal'),
+    gold: readCssVar('--gold'),
+    paperDim: readCssVar('--paper-dim'),
+    lineSoft: readCssVar('--line-soft'),
+    panel2: readCssVar('--panel-2'),
+    line: readCssVar('--line'),
+  };
+  THEME.tealFill = hexToRgba(THEME.teal, CHART_FILL_ALPHA);
+  THEME.goldFill = hexToRgba(THEME.gold, CHART_FILL_ALPHA);
+
+  // Shared Chart.js style fragments so the two chart configs below don't
+  // each redeclare the same font/tooltip styling.
+  const CHART_MONO_FONT_AXIS = { family: 'IBM Plex Mono', size: 10 };
+  const CHART_MONO_FONT_AXIS_TITLE = { family: 'IBM Plex Mono', size: 11 };
+  const CHART_MONO_FONT_TOOLTIP = { family: 'IBM Plex Mono', size: 12 };
+  const CHART_AXIS_TICK_STYLE = { color: THEME.paperDim, font: CHART_MONO_FONT_AXIS };
+  const CHART_AXIS_TITLE_STYLE = { color: THEME.paperDim, font: CHART_MONO_FONT_AXIS_TITLE };
+  const CHART_GRID_STYLE = { color: THEME.lineSoft };
+  const CHART_TOOLTIP_STYLE = {
+    backgroundColor: THEME.panel2,
+    borderColor: THEME.line,
+    borderWidth: 1,
+    titleFont: CHART_MONO_FONT_TOOLTIP,
+    bodyFont: CHART_MONO_FONT_TOOLTIP,
+  };
+
+  // =====================================================================
+  // DOM REFERENCES
+  // =====================================================================
+
   const els = {
     age: document.getElementById('age'),
     retireAge: document.getElementById('retireAge'),
@@ -668,12 +764,30 @@
     returnRate: document.getElementById('val-returnRate'),
   };
 
-  const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('en-US');
-  const PHASE_SPLIT = 35;
-  const PHASE_START = 22;
+  // The HTML's own `value="..."` attributes are the single source of truth
+  // for default values — snapshot them here instead of re-typing the same
+  // numbers into a separate JS object, so the two never drift apart.
+  const DEFAULTS = {};
+  Object.keys(els).forEach((key) => { DEFAULTS[key] = els[key].value; });
+  const DEFAULT_TAX_TREATMENT = TAX_TREATMENT_PRETAX;
+  const DEFAULT_EQUALIZE_NET_PAY = false;
 
-  // Savings rate as a function of age: rises 1%/yr (default) from a starting
-  // rate at age 22 through age 35, then rises 2%/yr (default) after 35, capped.
+  // =====================================================================
+  // SMALL DOM HELPERS
+  // =====================================================================
+
+  const setText = (id, text) => { document.getElementById(id).textContent = text; };
+  const setHTML = (id, html) => { document.getElementById(id).innerHTML = html; };
+  const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('en-US');
+  const fmtPct = (n, decimals = 1) => n.toFixed(decimals) + '%';
+
+  // =====================================================================
+  // PURE CALCULATION HELPERS
+  // =====================================================================
+
+  // Savings rate as a function of age: rises at the "early" increment from a
+  // starting rate at PHASE_START through PHASE_SPLIT, then rises at the
+  // "late" increment after that, capped.
   function savingsRateForAge(age, earlyStart, earlyIncrement, lateIncrement, lateCap){
     const clampedAge = Math.max(age, PHASE_START);
     if (clampedAge < PHASE_SPLIT){
@@ -687,19 +801,6 @@
   function salaryGrowthForAge(age, earlyGrowth, lateGrowth){
     return age < PHASE_SPLIT ? earlyGrowth : lateGrowth;
   }
-
-  // 2026 US federal income tax, single filer (IRS Rev. Proc. 2025-32).
-  // Estimate only — see disclaimer in the table caption.
-  const FEDERAL_STANDARD_DEDUCTION_2026_SINGLE = 16100;
-  const FEDERAL_BRACKETS_2026_SINGLE = [
-    { rate: 0.10, upTo: 12400 },
-    { rate: 0.12, upTo: 50400 },
-    { rate: 0.22, upTo: 105700 },
-    { rate: 0.24, upTo: 201775 },
-    { rate: 0.32, upTo: 256225 },
-    { rate: 0.35, upTo: 640600 },
-    { rate: 0.37, upTo: Infinity },
-  ];
 
   // Bracket thresholds and the standard deduction are assumed to rise with
   // inflation each year (as the IRS does in practice); the rates themselves
@@ -721,17 +822,6 @@
     return tax;
   }
 
-  // FICA (Social Security + Medicare), 2026 employee-side rates. Applies to gross
-  // wages regardless of pre-tax/Roth treatment — 401(k)/IRA contributions reduce
-  // federal taxable income but not the FICA wage base. Used only to make the
-  // table's net take-home figure more accurate; it doesn't feed into the
-  // "Federal tax" column or any other stat on the page.
-  const FICA_SS_RATE = 0.062;
-  const FICA_MEDICARE_RATE = 0.0145;
-  const FICA_ADDL_MEDICARE_RATE = 0.009;
-  const FICA_SS_WAGE_BASE_2026 = 184500;
-  const FICA_ADDL_MEDICARE_THRESHOLD_2026 = 200000; // single filer
-
   function estimateFicaTax(grossSalary, yearsFromNow, inflationRate){
     const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
     const ssWageBase = FICA_SS_WAGE_BASE_2026 * inflationFactor;
@@ -743,6 +833,19 @@
 
     return socialSecurityTax + medicareTax + additionalMedicareTax;
   }
+
+  // =====================================================================
+  // APPLICATION STATE
+  // =====================================================================
+
+  let chart = null;
+  let chartPct = null;
+  let taxTreatment = DEFAULT_TAX_TREATMENT; // TAX_TREATMENT_PRETAX or TAX_TREATMENT_ROTH
+  let equalizeNetPay = DEFAULT_EQUALIZE_NET_PAY; // when true, Roth contribution is solved to match Pre-tax net take-home
+
+  // =====================================================================
+  // PROJECTION
+  // =====================================================================
 
   function project(){
     let age = parseInt(els.age.value);
@@ -795,7 +898,7 @@
       const taxRothRef = estimateFederalTax(salary, yearsFromNow, inflation);
 
       let contribution, federalTax;
-      if (taxTreatment === 'pretax'){
+      if (taxTreatment === TAX_TREATMENT_PRETAX){
         contribution = nominalContribution;
         federalTax = taxPretaxRef;
       } else {
@@ -809,20 +912,20 @@
           const equalized = nominalContribution - (taxRothRef - taxPretaxRef);
           contribution = Math.max(0, Math.min(equalized, salary));
         } else {
-          contribution = nominalContribution; // same dollar amount as Pre-tax (current default behavior)
+          contribution = nominalContribution; // same dollar amount as Pre-tax (default behavior)
         }
       }
       const actualRate = salary > 0 ? contribution / salary : 0;
 
       // Savings are actually deposited and compounded monthly: split the year's
-      // contribution into 12 equal deposits and grow the balance at the
+      // contribution into equal monthly deposits and grow the balance at the
       // equivalent monthly rate, rather than adding one lump sum at year-end.
       // This doesn't change what's displayed (still one row per age), just how
       // the balance underneath it accumulates.
-      const monthlyContribution = contribution / 12;
-      const monthlyReturn = Math.pow(1 + returnRate, 1 / 12) - 1;
+      const monthlyContribution = contribution / MONTHS_PER_YEAR;
+      const monthlyReturn = Math.pow(1 + returnRate, 1 / MONTHS_PER_YEAR) - 1;
       let growthThisYear = 0;
-      for (let m = 0; m < 12; m++){
+      for (let m = 0; m < MONTHS_PER_YEAR; m++){
         const growthThisMonth = balance * monthlyReturn;
         balance = balance + growthThisMonth + monthlyContribution;
         growthThisYear += growthThisMonth;
@@ -839,9 +942,7 @@
       const yearsToRetirement = retireAge - ageThisYear;
       const contributionFutureValue = contribution * Math.pow(1 + returnRate, yearsToRetirement);
 
-      // FICA is always on gross salary, unaffected by the pretax/Roth toggle.
-      const ficaTax = fica;
-      const netTakeHome = salary - federalTax - ficaTax - contribution;
+      const netTakeHome = salary - federalTax - fica - contribution;
 
       yearRows.push({
         age: ageThisYear,
@@ -850,7 +951,7 @@
         contribution: contribution,
         futureValue: contributionFutureValue,
         federalTax: federalTax,
-        ficaTax: ficaTax,
+        ficaTax: fica,
         netTakeHome: netTakeHome
       });
 
@@ -862,14 +963,14 @@
       cumGrowth.push(totalGrowth);
     }
 
-    // 4% safe withdrawal rate applied to the final balance
-    const swrIncomeGross = balance * 0.04;
+    // Safe withdrawal rate applied to the final balance.
+    const swrIncomeGross = balance * SWR_RATE;
     const yearsToRetirementTotal = retireAge - age;
 
     // Pre-tax (Traditional) balances are withdrawn as ordinary taxable income in retirement,
     // taxed with the same inflation-adjusted brackets/deduction, projected out to the
     // retirement year. Roth balances were already taxed going in, so withdrawals are tax-free.
-    const swrTax = taxTreatment === 'pretax'
+    const swrTax = taxTreatment === TAX_TREATMENT_PRETAX
       ? estimateFederalTax(swrIncomeGross, yearsToRetirementTotal, inflation)
       : 0;
     const swrIncomeNet = swrIncomeGross - swrTax;
@@ -896,11 +997,11 @@
     };
   }
 
-  let chart;
-  let chartPct;
-  let taxTreatment = 'pretax'; // 'pretax' (Traditional) or 'roth' (after-tax)
-  let equalizeNetPay = false; // when true, Roth contribution is solved to match Pre-tax net take-home
-  function render(){
+  // =====================================================================
+  // RENDER
+  // =====================================================================
+
+  function renderSliderLabels(){
     valEls.age.textContent = els.age.value;
     valEls.retireAge.textContent = els.retireAge.value;
     valEls.inflation.textContent = els.inflation.value + '%';
@@ -911,9 +1012,9 @@
     valEls.lateCap.textContent = els.lateCap.value + '%';
     valEls.lateGrowth.textContent = els.lateGrowth.value + '%';
     valEls.returnRate.textContent = els.returnRate.value + '%';
+  }
 
-    const data = project();
-
+  function renderTopStats(data){
     const inflationRate = parseFloat(els.inflation.value) / 100;
     const currentAge = parseInt(els.age.value);
     const retireAgeVal = parseInt(els.retireAge.value);
@@ -923,64 +1024,64 @@
 
     const realFinalSalary = data.finalYearSalary / Math.pow(1 + inflationRate, yearsElapsedFinalSalary);
     const realSwrIncome = data.swrIncomeNet / Math.pow(1 + inflationRate, yearsToRetirement);
-
-    document.getElementById('stat-start-salary').textContent = fmtMoney(parseFloat(els.salary.value) || 0);
-    document.getElementById('stat-final-salary-real').textContent = fmtMoney(realFinalSalary);
-    document.getElementById('stat-final-salary-nominal-foot').textContent =
-      'Nominal at age ' + finalSalaryAge + ': ' + fmtMoney(data.finalYearSalary);
-    document.getElementById('stat-swr-real').textContent = fmtMoney(realSwrIncome) + '/yr';
-    document.getElementById('stat-swr-real-foot').textContent =
-      'Net nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncomeNet) + '/yr';
     const realSwrTax = data.swrTax / Math.pow(1 + inflationRate, yearsToRetirement);
-    document.getElementById('stat-swr-real-tax-note').textContent = taxTreatment === 'pretax'
-      ? 'Ordinary income tax removed: ' + fmtMoney(realSwrTax) + '/yr (Traditional)'
-      : 'No tax removed — Roth withdrawals are tax-free';
 
-    document.getElementById('stat-final').textContent = fmtMoney(data.final);
-    document.getElementById('stat-contrib').textContent = fmtMoney(data.totalContrib + parseFloat(els.balance.value || 0));
-    document.getElementById('stat-growth').textContent = fmtMoney(data.totalGrowth);
+    setText('stat-start-salary', fmtMoney(parseFloat(els.salary.value) || 0));
+    setText('stat-final-salary-real', fmtMoney(realFinalSalary));
+    setText('stat-final-salary-nominal-foot', 'Nominal at age ' + finalSalaryAge + ': ' + fmtMoney(data.finalYearSalary));
+    setText('stat-swr-real', fmtMoney(realSwrIncome) + '/yr');
+    setText('stat-swr-real-foot', 'Net nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncomeNet) + '/yr');
+    setText('stat-swr-real-tax-note', taxTreatment === TAX_TREATMENT_PRETAX
+      ? 'Ordinary income tax removed: ' + fmtMoney(realSwrTax) + '/yr (Traditional)'
+      : 'No tax removed — Roth withdrawals are tax-free');
+
+    setText('stat-final', fmtMoney(data.final));
+    setText('stat-contrib', fmtMoney(data.totalContrib + (parseFloat(els.balance.value) || 0)));
+    setText('stat-growth', fmtMoney(data.totalGrowth));
 
     if (data.swrPctOfFinalSalary !== null){
-      document.getElementById('stat-swr-pct').textContent = Math.round(data.swrPctOfFinalSalary) + '%';
-      const swrTaxLine = taxTreatment === 'pretax'
+      setText('stat-swr-pct', Math.round(data.swrPctOfFinalSalary) + '%');
+      const swrTaxLine = taxTreatment === TAX_TREATMENT_PRETAX
         ? 'Tax on withdrawal (est.): ' + fmtMoney(data.swrTax) + '/yr'
         : 'Roth withdrawal: tax-free';
-      document.getElementById('stat-swr-detail').innerHTML =
+      setHTML('stat-swr-detail',
         'Final salary: ' + fmtMoney(data.finalYearSalary) + '<br>' +
-        'Savings rate: ' + (data.finalYearRate * 100).toFixed(1) + '% (' + fmtMoney(data.finalYearContribution) + ')<br>' +
+        'Savings rate: ' + fmtPct(data.finalYearRate * 100) + ' (' + fmtMoney(data.finalYearContribution) + ')<br>' +
         'Net take-home (final year): ' + fmtMoney(data.finalYearNetTakeHome) + '<br>' +
-        '4% SWR gross income: ' + fmtMoney(data.swrIncomeGross) + '/yr<br>' +
+        SWR_RATE * 100 + '% SWR gross income: ' + fmtMoney(data.swrIncomeGross) + '/yr<br>' +
         swrTaxLine + '<br>' +
-        'Net SWR income: ' + fmtMoney(data.swrIncomeNet) + '/yr';
+        'Net SWR income: ' + fmtMoney(data.swrIncomeNet) + '/yr');
     } else {
-      document.getElementById('stat-swr-pct').textContent = '—';
-      document.getElementById('stat-swr-detail').textContent = 'n/a';
+      setText('stat-swr-pct', '—');
+      setText('stat-swr-detail', 'n/a');
     }
+  }
 
-    const tbody = document.getElementById('year-table-body');
-    tbody.innerHTML = data.yearRows.map(row => (
+  function renderTable(data){
+    setHTML('year-table-body', data.yearRows.map(row => (
       '<tr>' +
         '<td class="age">' + row.age + '</td>' +
         '<td>' + fmtMoney(row.salary) + '</td>' +
         '<td class="tax">' + fmtMoney(row.federalTax) + '</td>' +
         '<td class="tax">' + fmtMoney(row.ficaTax) + '</td>' +
-        '<td>' + (row.rate * 100).toFixed(1) + '%</td>' +
+        '<td>' + fmtPct(row.rate * 100) + '</td>' +
         '<td>' + fmtMoney(row.contribution) + '</td>' +
         '<td class="net">' + fmtMoney(row.netTakeHome) + '</td>' +
         '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
-        '<td class="pct">' + row.pctOfPot.toFixed(1) + '%</td>' +
+        '<td class="pct">' + fmtPct(row.pctOfPot) + '</td>' +
       '</tr>'
-    )).join('');
+    )).join(''));
 
     if (data.peakRow){
-      document.getElementById('peak-fv').textContent = fmtMoney(data.peakRow.futureValue);
-      document.getElementById('peak-age').textContent = data.peakRow.age;
+      setText('peak-fv', fmtMoney(data.peakRow.futureValue));
+      setText('peak-age', data.peakRow.age);
     } else {
-      document.getElementById('peak-fv').textContent = '—';
-      document.getElementById('peak-age').textContent = '—';
+      setText('peak-fv', '—');
+      setText('peak-age', '—');
     }
+  }
 
-    // --- Balance-over-time chart ---
+  function renderBalanceChart(data){
     const startBalance = parseFloat(els.balance.value) || 0;
     const contribSeries = data.cumContrib.map(c => c + startBalance);
     const growthSeries = data.cumGrowth;
@@ -990,76 +1091,70 @@
       chart.data.datasets[0].data = contribSeries;
       chart.data.datasets[1].data = growthSeries;
       chart.update();
-    } else {
-      const ctx = document.getElementById('chart').getContext('2d');
-      chart = new Chart(ctx, {
-        type:'line',
-        data:{
-          labels:data.ages,
-          datasets:[
-            {
-              label:'Contributions',
-              data:contribSeries,
-              borderColor:'#4C8577',
-              backgroundColor:'rgba(76,133,119,0.35)',
-              fill:true,
-              stack:'stack1',
-              tension:0.25,
-              pointRadius:0,
-              borderWidth:2,
-            },
-            {
-              label:'Investment growth',
-              data:growthSeries,
-              borderColor:'#C9A227',
-              backgroundColor:'rgba(201,162,39,0.35)',
-              fill:true,
-              stack:'stack1',
-              tension:0.25,
-              pointRadius:0,
-              borderWidth:2,
-            }
-          ]
-        },
-        options:{
-          responsive:true,
-          maintainAspectRatio:false,
-          interaction:{ mode:'index', intersect:false },
-          scales:{
-            x:{
-              title:{ display:true, text:'Age', color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:11 } },
-              ticks:{ color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:10 } },
-              grid:{ color:'#212D48' }
-            },
-            y:{
-              stacked:true,
-              ticks:{
-                color:'#9AA0AF',
-                font:{ family:'IBM Plex Mono', size:10 },
-                callback:(v)=> '$' + (v/1000).toFixed(0) + 'k'
-              },
-              grid:{ color:'#212D48' }
-            }
+      return;
+    }
+
+    const ctx = document.getElementById('chart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.ages,
+        datasets: [
+          {
+            label: 'Contributions',
+            data: contribSeries,
+            borderColor: THEME.teal,
+            backgroundColor: THEME.tealFill,
+            fill: true,
+            stack: 'stack1',
+            tension: 0.25,
+            pointRadius: 0,
+            borderWidth: 2,
           },
-          plugins:{
-            legend:{ display:false },
-            tooltip:{
-              backgroundColor:'#1C2740',
-              borderColor:'#2A3550',
-              borderWidth:1,
-              titleFont:{ family:'IBM Plex Mono', size:12 },
-              bodyFont:{ family:'IBM Plex Mono', size:12 },
-              callbacks:{
-                title: (items) => 'Age ' + items[0].label,
-                label: (item) => item.dataset.label + ': ' + fmtMoney(item.parsed.y)
-              }
+          {
+            label: 'Investment growth',
+            data: growthSeries,
+            borderColor: THEME.gold,
+            backgroundColor: THEME.goldFill,
+            fill: true,
+            stack: 'stack1',
+            tension: 0.25,
+            pointRadius: 0,
+            borderWidth: 2,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            title: { display: true, text: 'Age', ...CHART_AXIS_TITLE_STYLE },
+            ticks: CHART_AXIS_TICK_STYLE,
+            grid: CHART_GRID_STYLE
+          },
+          y: {
+            stacked: true,
+            ticks: { ...CHART_AXIS_TICK_STYLE, callback: (v) => '$' + (v / 1000).toFixed(0) + 'k' },
+            grid: CHART_GRID_STYLE
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...CHART_TOOLTIP_STYLE,
+            callbacks: {
+              title: (items) => 'Age ' + items[0].label,
+              label: (item) => item.dataset.label + ': ' + fmtMoney(item.parsed.y)
             }
           }
         }
-      });
-    }
+      }
+    });
+  }
 
-    // --- % of pot by age chart ---
+  function renderPctChart(data){
     const pctAges = data.yearRows.map(r => r.age);
     const pctValues = data.yearRows.map(r => r.pctOfPot);
 
@@ -1067,140 +1162,145 @@
       chartPct.data.labels = pctAges;
       chartPct.data.datasets[0].data = pctValues;
       chartPct.update();
-    } else {
-      const ctxPct = document.getElementById('chart-pct').getContext('2d');
-      chartPct = new Chart(ctxPct, {
-        type:'bar',
-        data:{
-          labels:pctAges,
-          datasets:[
-            {
-              label:'% of pot',
-              data:pctValues,
-              backgroundColor:'#C9A227',
-              borderRadius:2,
-              maxBarThickness:18,
-            }
-          ]
-        },
-        options:{
-          responsive:true,
-          maintainAspectRatio:false,
-          scales:{
-            x:{
-              title:{ display:true, text:'Age', color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:11 } },
-              ticks:{ color:'#9AA0AF', font:{ family:'IBM Plex Mono', size:10 } },
-              grid:{ display:false }
-            },
-            y:{
-              ticks:{
-                color:'#9AA0AF',
-                font:{ family:'IBM Plex Mono', size:10 },
-                callback:(v)=> v.toFixed(1) + '%'
-              },
-              grid:{ color:'#212D48' }
-            }
+      return;
+    }
+
+    const ctxPct = document.getElementById('chart-pct').getContext('2d');
+    chartPct = new Chart(ctxPct, {
+      type: 'bar',
+      data: {
+        labels: pctAges,
+        datasets: [
+          {
+            label: '% of pot',
+            data: pctValues,
+            backgroundColor: THEME.gold,
+            borderRadius: 2,
+            maxBarThickness: 18,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            title: { display: true, text: 'Age', ...CHART_AXIS_TITLE_STYLE },
+            ticks: CHART_AXIS_TICK_STYLE,
+            grid: { display: false }
           },
-          plugins:{
-            legend:{ display:false },
-            tooltip:{
-              backgroundColor:'#1C2740',
-              borderColor:'#2A3550',
-              borderWidth:1,
-              titleFont:{ family:'IBM Plex Mono', size:12 },
-              bodyFont:{ family:'IBM Plex Mono', size:12 },
-              callbacks:{
-                title: (items) => 'Age ' + items[0].label,
-                label: (item) => 'Share of pot: ' + item.parsed.y.toFixed(1) + '%'
-              }
+          y: {
+            ticks: { ...CHART_AXIS_TICK_STYLE, callback: (v) => v.toFixed(1) + '%' },
+            grid: CHART_GRID_STYLE
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...CHART_TOOLTIP_STYLE,
+            callbacks: {
+              title: (items) => 'Age ' + items[0].label,
+              label: (item) => 'Share of pot: ' + item.parsed.y.toFixed(1) + '%'
             }
           }
         }
-      });
-    }
+      }
+    });
   }
 
-  // --- Chart tab switching ---
-  const tabBalance = document.getElementById('tab-balance');
-  const tabPct = document.getElementById('tab-pct');
+  function render(){
+    renderSliderLabels();
+    const data = project();
+    renderTopStats(data);
+    renderTable(data);
+    renderBalanceChart(data);
+    renderPctChart(data);
+  }
+
+  // =====================================================================
+  // SEGMENTED TOGGLE CONTROL
+  // Shared wiring for every "pick one of N buttons" control on the page
+  // (chart tabs, tax treatment, equalize net pay) instead of three
+  // near-identical hand-written implementations.
+  // =====================================================================
+
+  function createSegmentedToggle(buttonConfigs, onSelect){
+    function select(value){
+      buttonConfigs.forEach(({ value: v, el }) => {
+        const isActive = v === value;
+        el.classList.toggle('active', isActive);
+        el.setAttribute('aria-selected', isActive);
+      });
+      onSelect(value);
+    }
+    buttonConfigs.forEach(({ value, el }) => {
+      el.addEventListener('click', () => select(value));
+    });
+    return select;
+  }
+
+  // --- Chart tabs ---
   const paneBalance = document.getElementById('pane-balance');
   const panePct = document.getElementById('pane-pct');
-
-  function activateTab(target){
-    const isBalance = target === 'balance';
-    tabBalance.classList.toggle('active', isBalance);
-    tabPct.classList.toggle('active', !isBalance);
-    tabBalance.setAttribute('aria-selected', isBalance);
-    tabPct.setAttribute('aria-selected', !isBalance);
-    paneBalance.style.display = isBalance ? '' : 'none';
-    panePct.style.display = isBalance ? 'none' : '';
-    if (!isBalance && chartPct) chartPct.resize();
-    if (isBalance && chart) chart.resize();
-  }
-
-  tabBalance.addEventListener('click', () => activateTab('balance'));
-  tabPct.addEventListener('click', () => activateTab('pct'));
+  const selectChartTab = createSegmentedToggle(
+    [
+      { value: 'balance', el: document.getElementById('tab-balance') },
+      { value: 'pct', el: document.getElementById('tab-pct') },
+    ],
+    (value) => {
+      const isBalance = value === 'balance';
+      paneBalance.style.display = isBalance ? '' : 'none';
+      panePct.style.display = isBalance ? 'none' : '';
+      if (isBalance && chart) chart.resize();
+      if (!isBalance && chartPct) chartPct.resize();
+    }
+  );
 
   // --- Pre-tax / Roth toggle ---
-  const togglePretax = document.getElementById('toggle-pretax');
-  const toggleRoth = document.getElementById('toggle-roth');
-
-  function setTaxTreatment(value){
-    taxTreatment = value;
-    togglePretax.classList.toggle('active', value === 'pretax');
-    toggleRoth.classList.toggle('active', value === 'roth');
-    togglePretax.setAttribute('aria-selected', value === 'pretax');
-    toggleRoth.setAttribute('aria-selected', value === 'roth');
-    render();
-  }
-
-  togglePretax.addEventListener('click', () => setTaxTreatment('pretax'));
-  toggleRoth.addEventListener('click', () => setTaxTreatment('roth'));
+  const selectTaxTreatment = createSegmentedToggle(
+    [
+      { value: TAX_TREATMENT_PRETAX, el: document.getElementById('toggle-pretax') },
+      { value: TAX_TREATMENT_ROTH, el: document.getElementById('toggle-roth') },
+    ],
+    (value) => {
+      taxTreatment = value;
+      render();
+    }
+  );
 
   // --- Equalize net pay toggle ---
-  const toggleEqualizeOff = document.getElementById('toggle-equalize-off');
-  const toggleEqualizeOn = document.getElementById('toggle-equalize-on');
   const equalizeHint = document.getElementById('equalize-hint');
-
-  function setEqualizeNetPay(value){
-    equalizeNetPay = value;
-    toggleEqualizeOff.classList.toggle('active', !value);
-    toggleEqualizeOn.classList.toggle('active', value);
-    toggleEqualizeOff.setAttribute('aria-selected', !value);
-    toggleEqualizeOn.setAttribute('aria-selected', value);
-    equalizeHint.textContent = value
-      ? 'Roth contribution is reduced so your net take-home pay matches Pre-tax at the same rate — the Traditional side never changes.'
-      : 'Same dollar contribution either way — Roth costs more net pay since it isn\'t tax-deductible.';
-    render();
-  }
-
-  toggleEqualizeOff.addEventListener('click', () => setEqualizeNetPay(false));
-  toggleEqualizeOn.addEventListener('click', () => setEqualizeNetPay(true));
-
-  const DEFAULTS = {
-    age: '22',
-    retireAge: '60',
-    salary: '75000',
-    balance: '20000',
-    inflation: '3',
-    earlyStartRate: '5',
-    earlyIncrement: '1',
-    earlyGrowth: '1',
-    lateIncrement: '2',
-    lateCap: '25',
-    lateGrowth: '0',
-    returnRate: '4',
+  const EQUALIZE_HINT_TEXT = {
+    off: 'Same dollar contribution either way — Roth costs more net pay since it isn\'t tax-deductible.',
+    on: 'Roth contribution is reduced so your net take-home pay matches Pre-tax at the same rate — the Traditional side never changes.',
   };
-  const DEFAULT_TAX_TREATMENT = 'pretax';
-  const DEFAULT_EQUALIZE_NET_PAY = false;
+  const selectEqualizeNetPay = createSegmentedToggle(
+    [
+      { value: false, el: document.getElementById('toggle-equalize-off') },
+      { value: true, el: document.getElementById('toggle-equalize-on') },
+    ],
+    (value) => {
+      equalizeNetPay = value;
+      equalizeHint.textContent = value ? EQUALIZE_HINT_TEXT.on : EQUALIZE_HINT_TEXT.off;
+      render();
+    }
+  );
+
+  // =====================================================================
+  // RESET
+  // =====================================================================
 
   document.getElementById('reset-btn').addEventListener('click', () => {
     Object.keys(DEFAULTS).forEach(key => {
       if (els[key]) els[key].value = DEFAULTS[key];
     });
-    setTaxTreatment(DEFAULT_TAX_TREATMENT);
-    setEqualizeNetPay(DEFAULT_EQUALIZE_NET_PAY);
+    selectTaxTreatment(DEFAULT_TAX_TREATMENT);
+    selectEqualizeNetPay(DEFAULT_EQUALIZE_NET_PAY);
   });
+
+  // =====================================================================
+  // INIT
+  // =====================================================================
 
   Object.values(els).forEach(el => el.addEventListener('input', render));
   render();
