@@ -553,13 +553,14 @@
       <div class="tax-toggle" role="tablist">
         <button type="button" class="toggle-btn active" id="toggle-pretax" role="tab" aria-selected="true">Pre-tax (Traditional)</button>
         <button type="button" class="toggle-btn" id="toggle-roth" role="tab" aria-selected="false">After-tax (Roth)</button>
+        <button type="button" class="toggle-btn" id="toggle-taxable" role="tab" aria-selected="false">Taxable (Brokerage)</button>
       </div>
       <span class="tax-toggle-label equalize-label">Equalize net pay:</span>
       <div class="tax-toggle" role="tablist">
         <button type="button" class="toggle-btn active" id="toggle-equalize-off" role="tab" aria-selected="true">Off</button>
         <button type="button" class="toggle-btn" id="toggle-equalize-on" role="tab" aria-selected="false">On</button>
       </div>
-      <span class="equalize-hint" id="equalize-hint">Same dollar contribution either way — Roth costs more net pay since it isn't tax-deductible.</span>
+      <span class="equalize-hint" id="equalize-hint">Same dollar contribution either way — Roth and Taxable cost more net pay than Traditional since neither is tax-deductible.</span>
     </div>
 
     <div class="stats-row stats-row-3">
@@ -645,9 +646,10 @@
 
       <div class="tax-disclaimer">
         Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, credits, and other deductions — not tax advice.
-        Pre-tax (Traditional) reduces that year's taxable income by the savings amount before computing tax, matching a traditional 401(k)/IRA. After-tax (Roth) taxes the full salary and contributes what's left after tax, matching a Roth account.
-        FICA (est.) is 2026 Social Security (6.2% up to the $184,500 wage base) plus Medicare (1.45–2.35%), applied to gross wages regardless of the pre-tax/Roth toggle. Both Federal tax and FICA are subtracted to get net take-home; FICA never affects any other figure on the page.
-        Equalize net pay (Roth only): reduces the Roth contribution amount so that year's net take-home matches what Pre-tax would give at the same savings-rate schedule. The Savings % and Savings amount columns reflect this adjusted, smaller contribution — which is why Roth balances often end up lower than Traditional ones for the "same" paycheck impact.
+        Pre-tax (Traditional) reduces that year's taxable income by the savings amount before computing tax, matching a traditional 401(k)/IRA. After-tax (Roth) and Taxable (Brokerage) both tax the full salary with no deduction — the difference between them is entirely at withdrawal, not on the way in.
+        FICA (est.) is 2026 Social Security (6.2% up to the $184,500 wage base) plus Medicare (1.45–2.35%), applied to gross wages regardless of the contribution-type toggle. Both Federal tax and FICA are subtracted to get net take-home; FICA never affects any other figure on the page.
+        Equalize net pay (Roth/Taxable only): reduces the contribution amount so that year's net take-home matches what Pre-tax would give at the same savings-rate schedule. The Savings % and Savings amount columns reflect this adjusted, smaller contribution — which is why Roth/Taxable balances often end up lower than Traditional ones for the "same" paycheck impact.
+        Taxable (Brokerage) withdrawal tax: assumes a buy-and-hold account where gains are only realized at withdrawal, taxed as 2026 long-term capital gains (0%/15%/20% brackets, inflation-adjusted) plus the 3.8% Net Investment Income Tax above $200,000 MAGI (a fixed threshold — by law it has never been inflation-indexed). Each year's withdrawal is assumed to carry gain in the same proportion as the account's overall gain-to-balance ratio; your original contributions come back tax-free as return of basis.
       </div>
       <div class="table-scroll">
         <table id="year-table">
@@ -716,9 +718,26 @@
   const FICA_SS_WAGE_BASE_2026 = 184500;
   const FICA_ADDL_MEDICARE_THRESHOLD_2026 = 200000; // single filer
 
-  // Tax treatment options for the pre-tax/Roth toggle.
+  // 2026 long-term capital gains brackets, single filer (IRS Rev. Proc. 2025-32).
+  // These thresholds ARE inflation-adjusted each year, same as the ordinary brackets.
+  const LTCG_BRACKETS_2026_SINGLE = [
+    { rate: 0.00, upTo: 49450 },
+    { rate: 0.15, upTo: 545500 },
+    { rate: 0.20, upTo: Infinity },
+  ];
+
+  // Net Investment Income Tax (IRC §1411): a flat 3.8% surtax on investment
+  // income above this MAGI threshold. Unlike every other threshold on this
+  // page, NIIT's $200,000 (single) threshold is fixed by statute and has
+  // never been inflation-indexed since its 2013 enactment — so it is NOT
+  // scaled by inflation here, on purpose.
+  const NIIT_RATE = 0.038;
+  const NIIT_THRESHOLD_SINGLE = 200000;
+
+  // Tax treatment options for the contribution-type toggle.
   const TAX_TREATMENT_PRETAX = 'pretax';
   const TAX_TREATMENT_ROTH = 'roth';
+  const TAX_TREATMENT_TAXABLE = 'taxable';
 
   // Colors read once from the CSS custom properties in :root, so Chart.js
   // (which needs literal color strings, not CSS vars) never duplicates a
@@ -861,6 +880,35 @@
     return socialSecurityTax + medicareTax + additionalMedicareTax;
   }
 
+  // Long-term capital gains tax on a realized gain, assuming (as this simplified
+  // model does) it's the taxpayer's only income that year — so the standard
+  // deduction offsets the gain before the 0/15/20% brackets apply.
+  function estimateCapitalGainsTax(realizedGain, yearsFromNow, inflationRate){
+    const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
+    const deduction = FEDERAL_STANDARD_DEDUCTION_2026_SINGLE * inflationFactor;
+    const taxableGain = Math.max(realizedGain - deduction, 0);
+
+    let tax = 0;
+    let prevCap = 0;
+    for (const bracket of LTCG_BRACKETS_2026_SINGLE){
+      const cap = bracket.upTo === Infinity ? Infinity : bracket.upTo * inflationFactor;
+      if (taxableGain <= prevCap) break;
+      const amountInBracket = Math.min(taxableGain, cap) - prevCap;
+      tax += amountInBracket * bracket.rate;
+      prevCap = cap;
+    }
+    return tax;
+  }
+
+  // Net Investment Income Tax: 3.8% on the lesser of net investment income or
+  // the amount MAGI exceeds the (fixed, non-inflated) threshold. This model
+  // treats the realized capital gain itself as both the investment income and
+  // the whole of MAGI, since it assumes no other income in retirement.
+  function estimateNiit(realizedGain){
+    const excessOverThreshold = Math.max(realizedGain - NIIT_THRESHOLD_SINGLE, 0);
+    return NIIT_RATE * Math.min(realizedGain, excessOverThreshold);
+  }
+
   // =====================================================================
   // APPLICATION STATE
   // =====================================================================
@@ -929,13 +977,16 @@
         contribution = nominalContribution;
         federalTax = taxPretaxRef;
       } else {
-        federalTax = taxRothRef; // Roth tax is always on full salary, independent of contribution amount.
+        // Roth and Taxable both contribute after-tax dollars: tax is always on the
+        // full salary, independent of the contribution amount. They only diverge
+        // from each other at withdrawal time (see the SWR tax calculation below).
+        federalTax = taxRothRef;
         if (equalizeNetPay){
-          // Solve the Roth contribution so net take-home matches what Pre-tax would
-          // give at the same nominal rate. Since Roth tax doesn't depend on the
-          // contribution amount, this has a direct closed-form solution:
+          // Solve the contribution so net take-home matches what Pre-tax would
+          // give at the same nominal rate. Since this tax doesn't depend on the
+          // contribution amount, there's a direct closed-form solution:
           // netPretax = salary - taxPretaxRef - fica - nominalContribution
-          // netRoth(C) = salary - taxRothRef - fica - C  =>  C = nominalContribution - (taxRothRef - taxPretaxRef)
+          // netThis(C) = salary - taxRothRef - fica - C  =>  C = nominalContribution - (taxRothRef - taxPretaxRef)
           const equalized = nominalContribution - (taxRothRef - taxPretaxRef);
           contribution = Math.max(0, Math.min(equalized, salary));
         } else {
@@ -997,9 +1048,24 @@
     // Pre-tax (Traditional) balances are withdrawn as ordinary taxable income in retirement,
     // taxed with the same inflation-adjusted brackets/deduction, projected out to the
     // retirement year. Roth balances were already taxed going in, so withdrawals are tax-free.
-    const swrTax = taxTreatment === TAX_TREATMENT_PRETAX
-      ? estimateFederalTax(swrIncomeGross, yearsToRetirementTotal, inflation)
-      : 0;
+    // Taxable (Brokerage) withdrawals are taxed only on their gain portion, at long-term
+    // capital gains rates plus NIIT if applicable — see estimateCapitalGainsTax/estimateNiit.
+    let swrTax = 0;
+    let swrTaxableGainPortion = 0;
+    if (taxTreatment === TAX_TREATMENT_PRETAX){
+      swrTax = estimateFederalTax(swrIncomeGross, yearsToRetirementTotal, inflation);
+    } else if (taxTreatment === TAX_TREATMENT_TAXABLE){
+      // Cost basis = starting balance plus everything contributed along the way.
+      // Each withdrawal is assumed to carry gain in the same proportion as the
+      // account's overall gain-to-balance ratio (a pro-rata realization, not a
+      // specific-lot sale).
+      const basis = balance0 + totalContrib;
+      const gainFraction = balance > 0 ? Math.max(0, (balance - basis) / balance) : 0;
+      swrTaxableGainPortion = swrIncomeGross * gainFraction;
+      const capitalGainsTax = estimateCapitalGainsTax(swrTaxableGainPortion, yearsToRetirementTotal, inflation);
+      const niit = estimateNiit(swrTaxableGainPortion);
+      swrTax = capitalGainsTax + niit;
+    }
     const swrIncomeNet = swrIncomeGross - swrTax;
 
     // Once retired, you're no longer setting aside the savings-rate portion of pay —
@@ -1020,7 +1086,7 @@
     return {
       ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows, peakRow, totalFutureValue,
       finalYearSalary, finalYearContribution, finalYearRate, finalYearNetTakeHome,
-      swrIncomeGross, swrTax, swrIncomeNet, swrPctOfFinalSalary
+      swrIncomeGross, swrTax, swrTaxableGainPortion, swrIncomeNet, swrPctOfFinalSalary
     };
   }
 
@@ -1041,6 +1107,15 @@
     valEls.returnRate.textContent = els.returnRate.value + '%';
   }
 
+  // Single source of truth for how each contribution type is described at
+  // withdrawal time, used by both the top summary panel and the detail
+  // breakdown so the wording can't drift between the two.
+  function swrTaxTreatmentLabel(){
+    if (taxTreatment === TAX_TREATMENT_PRETAX) return 'Ordinary income tax';
+    if (taxTreatment === TAX_TREATMENT_TAXABLE) return 'Capital gains tax + NIIT';
+    return null; // Roth: withdrawals are tax-free, nothing to label
+  }
+
   function renderTopStats(data){
     const inflationRate = parseFloat(els.inflation.value) / 100;
     const currentAge = parseInt(els.age.value);
@@ -1052,14 +1127,15 @@
     const realFinalSalary = data.finalYearSalary / Math.pow(1 + inflationRate, yearsElapsedFinalSalary);
     const realSwrIncome = data.swrIncomeNet / Math.pow(1 + inflationRate, yearsToRetirement);
     const realSwrTax = data.swrTax / Math.pow(1 + inflationRate, yearsToRetirement);
+    const taxLabel = swrTaxTreatmentLabel();
 
     setText('stat-start-salary', fmtMoney(parseFloat(els.salary.value) || 0));
     setText('stat-final-salary-real', fmtMoney(realFinalSalary));
     setText('stat-final-salary-nominal-foot', 'Nominal at age ' + finalSalaryAge + ': ' + fmtMoney(data.finalYearSalary));
     setText('stat-swr-real', fmtMoney(realSwrIncome) + '/yr');
     setText('stat-swr-real-foot', 'Net nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncomeNet) + '/yr');
-    setText('stat-swr-real-tax-note', taxTreatment === TAX_TREATMENT_PRETAX
-      ? 'Ordinary income tax removed: ' + fmtMoney(realSwrTax) + '/yr (Traditional)'
+    setText('stat-swr-real-tax-note', taxLabel
+      ? taxLabel + ' removed: ' + fmtMoney(realSwrTax) + '/yr'
       : 'No tax removed — Roth withdrawals are tax-free');
 
     setText('stat-final', fmtMoney(data.final));
@@ -1068,8 +1144,8 @@
 
     if (data.swrPctOfFinalSalary !== null){
       setText('stat-swr-pct', Math.round(data.swrPctOfFinalSalary) + '%');
-      const swrTaxLine = taxTreatment === TAX_TREATMENT_PRETAX
-        ? 'Tax on withdrawal (est.): ' + fmtMoney(data.swrTax) + '/yr'
+      const swrTaxLine = taxLabel
+        ? taxLabel + ' (est.): ' + fmtMoney(data.swrTax) + '/yr'
         : 'Roth withdrawal: tax-free';
       setHTML('stat-swr-detail',
         'Final salary: ' + fmtMoney(data.finalYearSalary) + '<br>' +
@@ -1283,11 +1359,12 @@
     }
   );
 
-  // --- Pre-tax / Roth toggle ---
+  // --- Contribution type toggle: Pre-tax / Roth / Taxable ---
   const selectTaxTreatment = createSegmentedToggle(
     [
       { value: TAX_TREATMENT_PRETAX, el: document.getElementById('toggle-pretax') },
       { value: TAX_TREATMENT_ROTH, el: document.getElementById('toggle-roth') },
+      { value: TAX_TREATMENT_TAXABLE, el: document.getElementById('toggle-taxable') },
     ],
     (value) => {
       taxTreatment = value;
@@ -1298,8 +1375,8 @@
   // --- Equalize net pay toggle ---
   const equalizeHint = document.getElementById('equalize-hint');
   const EQUALIZE_HINT_TEXT = {
-    off: 'Same dollar contribution either way — Roth costs more net pay since it isn\'t tax-deductible.',
-    on: 'Roth contribution is reduced so your net take-home pay matches Pre-tax at the same rate — the Traditional side never changes.',
+    off: 'Same dollar contribution either way — Roth and Taxable cost more net pay than Traditional since neither is tax-deductible.',
+    on: 'Roth/Taxable contribution is reduced so your net take-home pay matches Pre-tax at the same rate — the Traditional side never changes.',
   };
   const selectEqualizeNetPay = createSegmentedToggle(
     [
