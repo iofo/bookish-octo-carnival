@@ -137,13 +137,20 @@
 
   .stats-row{
     display:grid;
-    grid-template-columns:repeat(3,1fr);
+    grid-template-columns:repeat(4,1fr);
     gap:1px;
     background:var(--line);
     border:1px solid var(--line);
     margin-bottom:36px;
   }
+  @media (max-width:900px){ .stats-row{ grid-template-columns:repeat(2,1fr); } }
   @media (max-width:600px){ .stats-row{ grid-template-columns:1fr; } }
+  .stat .stat-foot{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    color:var(--paper-dim);
+    margin-top:8px;
+  }
   .stat{
     background:var(--panel);
     padding:22px 24px;
@@ -271,6 +278,11 @@
         <div class="stat-label">Total investment growth</div>
         <div class="stat-value" id="stat-growth">—</div>
       </div>
+      <div class="stat gold">
+        <div class="stat-label">Retirement income at 4% SWR</div>
+        <div class="stat-value" id="stat-swr-pct">—</div>
+        <div class="stat-foot" id="stat-swr-detail">—</div>
+      </div>
     </div>
 
     <div class="chart-wrap">
@@ -332,6 +344,8 @@
     let salary = salary0;
     let totalContrib = 0;
     let totalGrowth = 0;
+    let finalYearSalary = salary0;
+    let finalYearContribution = 0;
 
     for (let y = 1; y <= years; y++){
       const contribution = salary * savingsRate;
@@ -339,6 +353,10 @@
       balance = balance + growthThisYear + contribution;
       totalContrib += contribution;
       totalGrowth += growthThisYear;
+
+      finalYearSalary = salary;
+      finalYearContribution = contribution;
+
       salary = salary * (1 + growthRate);
 
       ages.push(age + y);
@@ -347,7 +365,17 @@
       cumGrowth.push(totalGrowth);
     }
 
-    return { ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance };
+    // 4% safe withdrawal rate applied to the final balance
+    const swrIncome = balance * 0.04;
+    // Once retired, you're no longer setting aside the savings-rate portion of pay —
+    // compare withdrawal income to what you were actually living on (salary minus that year's savings).
+    const finalTakeHome = finalYearSalary - finalYearContribution;
+    const swrPctOfFinalSalary = finalTakeHome > 0 ? (swrIncome / finalTakeHome) * 100 : null;
+
+    return {
+      ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance,
+      finalYearSalary, finalYearContribution, finalTakeHome, swrIncome, swrPctOfFinalSalary
+    };
   }
 
   let chart;
@@ -363,6 +391,15 @@
     document.getElementById('stat-final').textContent = fmtMoney(data.final);
     document.getElementById('stat-contrib').textContent = fmtMoney(data.totalContrib + parseFloat(els.balance.value || 0));
     document.getElementById('stat-growth').textContent = fmtMoney(data.totalGrowth);
+
+    if (data.swrPctOfFinalSalary !== null){
+      document.getElementById('stat-swr-pct').textContent = Math.round(data.swrPctOfFinalSalary) + '%';
+      document.getElementById('stat-swr-detail').textContent =
+        fmtMoney(data.swrIncome) + '/yr vs ' + fmtMoney(data.finalTakeHome) + ' take-home';
+    } else {
+      document.getElementById('stat-swr-pct').textContent = '—';
+      document.getElementById('stat-swr-detail').textContent = 'n/a';
+    }
 
     const ctx = document.getElementById('chart').getContext('2d');
     const startBalance = parseFloat(els.balance.value) || 0;
