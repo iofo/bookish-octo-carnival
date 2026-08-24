@@ -328,6 +328,14 @@
     </div>
 
     <hr class="divider">
+    <div class="section-label">Inflation</div>
+
+    <div class="field">
+      <label>Inflation rate <span class="val" id="val-inflation">3%</span></label>
+      <input type="range" id="inflation" min="0" max="8" value="3" step="0.25">
+    </div>
+
+    <hr class="divider">
     <div class="section-label">Early career (22–35)</div>
     <p style="font-size:0.78rem;color:var(--paper-dim);margin:-10px 0 20px;line-height:1.5;">
       Savings rate rises each year starting at 22. From 35 on, it switches to the late-career increment below, up to the cap.
@@ -457,6 +465,7 @@
     retireAge: document.getElementById('retireAge'),
     salary: document.getElementById('salary'),
     balance: document.getElementById('balance'),
+    inflation: document.getElementById('inflation'),
     earlyStartRate: document.getElementById('earlyStartRate'),
     earlyIncrement: document.getElementById('earlyIncrement'),
     earlyGrowth: document.getElementById('earlyGrowth'),
@@ -468,6 +477,7 @@
   const valEls = {
     age: document.getElementById('val-age'),
     retireAge: document.getElementById('val-retireAge'),
+    inflation: document.getElementById('val-inflation'),
     earlyStartRate: document.getElementById('val-earlyStartRate'),
     earlyIncrement: document.getElementById('val-earlyIncrement'),
     earlyGrowth: document.getElementById('val-earlyGrowth'),
@@ -503,13 +513,20 @@
     if (retireAge <= age) retireAge = age + 1;
     const salary0 = parseFloat(els.salary.value) || 0;
     const balance0 = parseFloat(els.balance.value) || 0;
+    const inflation = parseFloat(els.inflation.value) / 100;
     const earlyStart = parseFloat(els.earlyStartRate.value) / 100;
     const earlyIncrement = parseFloat(els.earlyIncrement.value) / 100;
-    const earlyGrowth = parseFloat(els.earlyGrowth.value) / 100;
+    // Growth and return sliders are spreads over inflation — add inflation back in
+    // to get the nominal rates the projection actually compounds at. This mostly
+    // just makes the dollar figures look like real-world (nominal) numbers; it
+    // has little effect on rate-based figures like the SWR % or the peak age,
+    // since inflation appears in both salary growth and investment return and
+    // largely cancels out of those ratios.
+    const earlyGrowth = inflation + parseFloat(els.earlyGrowth.value) / 100;
     const lateIncrement = parseFloat(els.lateIncrement.value) / 100;
     const lateCap = parseFloat(els.lateCap.value) / 100;
-    const lateGrowth = parseFloat(els.lateGrowth.value) / 100;
-    const returnRate = parseFloat(els.returnRate.value) / 100;
+    const lateGrowth = inflation + parseFloat(els.lateGrowth.value) / 100;
+    const returnRate = inflation + parseFloat(els.returnRate.value) / 100;
 
     const years = retireAge - age;
     const ages = [age];
@@ -596,6 +613,7 @@
   function render(){
     valEls.age.textContent = els.age.value;
     valEls.retireAge.textContent = els.retireAge.value;
+    valEls.inflation.textContent = els.inflation.value + '%';
     valEls.earlyStartRate.textContent = els.earlyStartRate.value + '%';
     valEls.earlyIncrement.textContent = els.earlyIncrement.value + '%';
     valEls.earlyGrowth.textContent = els.earlyGrowth.value + '%';
