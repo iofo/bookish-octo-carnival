@@ -789,11 +789,21 @@
     }
 
     // 4% safe withdrawal rate applied to the final balance
-    const swrIncome = balance * 0.04;
+    const swrIncomeGross = balance * 0.04;
+    const yearsToRetirementTotal = retireAge - age;
+
+    // Pre-tax (Traditional) balances are withdrawn as ordinary taxable income in retirement,
+    // taxed with the same inflation-adjusted brackets/deduction, projected out to the
+    // retirement year. Roth balances were already taxed going in, so withdrawals are tax-free.
+    const swrTax = taxTreatment === 'pretax'
+      ? estimateFederalTax(swrIncomeGross, yearsToRetirementTotal, inflation)
+      : 0;
+    const swrIncomeNet = swrIncomeGross - swrTax;
+
     // Once retired, you're no longer setting aside the savings-rate portion of pay —
-    // compare withdrawal income to what you were actually living on (salary minus that year's savings).
-    const finalTakeHome = finalYearSalary - finalYearContribution;
-    const swrPctOfFinalSalary = finalTakeHome > 0 ? (swrIncome / finalTakeHome) * 100 : null;
+    // compare net retirement income to what you actually took home in your final working year.
+    const finalYearNetTakeHome = yearRows.length ? yearRows[yearRows.length - 1].netTakeHome : 0;
+    const swrPctOfFinalSalary = finalYearNetTakeHome > 0 ? (swrIncomeNet / finalYearNetTakeHome) * 100 : null;
 
     let peakRow = null;
     let totalFutureValue = 0;
@@ -807,7 +817,8 @@
 
     return {
       ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows, peakRow, totalFutureValue,
-      finalYearSalary, finalYearContribution, finalYearRate, finalTakeHome, swrIncome, swrPctOfFinalSalary
+      finalYearSalary, finalYearContribution, finalYearRate, finalYearNetTakeHome,
+      swrIncomeGross, swrTax, swrIncomeNet, swrPctOfFinalSalary
     };
   }
 
@@ -836,7 +847,7 @@
     const yearsElapsedFinalSalary = Math.max(finalSalaryAge - currentAge, 0);
 
     const realFinalSalary = data.finalYearSalary / Math.pow(1 + inflationRate, yearsElapsedFinalSalary);
-    const realSwrIncome = data.swrIncome / Math.pow(1 + inflationRate, yearsToRetirement);
+    const realSwrIncome = data.swrIncomeNet / Math.pow(1 + inflationRate, yearsToRetirement);
 
     document.getElementById('stat-start-salary').textContent = fmtMoney(parseFloat(els.salary.value) || 0);
     document.getElementById('stat-final-salary-real').textContent = fmtMoney(realFinalSalary);
@@ -844,7 +855,7 @@
       'Nominal at age ' + finalSalaryAge + ': ' + fmtMoney(data.finalYearSalary);
     document.getElementById('stat-swr-real').textContent = fmtMoney(realSwrIncome) + '/yr';
     document.getElementById('stat-swr-real-foot').textContent =
-      'Nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncome) + '/yr';
+      'Net nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncomeNet) + '/yr';
 
     document.getElementById('stat-final').textContent = fmtMoney(data.final);
     document.getElementById('stat-contrib').textContent = fmtMoney(data.totalContrib + parseFloat(els.balance.value || 0));
@@ -852,11 +863,16 @@
 
     if (data.swrPctOfFinalSalary !== null){
       document.getElementById('stat-swr-pct').textContent = Math.round(data.swrPctOfFinalSalary) + '%';
+      const swrTaxLine = taxTreatment === 'pretax'
+        ? 'Tax on withdrawal (est.): ' + fmtMoney(data.swrTax) + '/yr'
+        : 'Roth withdrawal: tax-free';
       document.getElementById('stat-swr-detail').innerHTML =
         'Final salary: ' + fmtMoney(data.finalYearSalary) + '<br>' +
         'Savings rate: ' + (data.finalYearRate * 100).toFixed(1) + '% (' + fmtMoney(data.finalYearContribution) + ')<br>' +
-        'Take-home: ' + fmtMoney(data.finalTakeHome) + '<br>' +
-        '4% SWR income: ' + fmtMoney(data.swrIncome) + '/yr';
+        'Net take-home (final year): ' + fmtMoney(data.finalYearNetTakeHome) + '<br>' +
+        '4% SWR gross income: ' + fmtMoney(data.swrIncomeGross) + '/yr<br>' +
+        swrTaxLine + '<br>' +
+        'Net SWR income: ' + fmtMoney(data.swrIncomeNet) + '/yr';
     } else {
       document.getElementById('stat-swr-pct').textContent = '—';
       document.getElementById('stat-swr-detail').textContent = 'n/a';
