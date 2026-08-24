@@ -266,6 +266,7 @@
   }
   table{
     width:100%;
+    table-layout:fixed;
     border-collapse:collapse;
     font-family:'IBM Plex Mono', monospace;
     font-size:0.82rem;
@@ -284,16 +285,23 @@
     border-bottom:1px solid var(--line);
   }
   thead th:first-child, tbody td:first-child{ text-align:left; }
+  thead th.col-fv, tbody td.fv{ width:12%; }
+  thead th.col-pct, tbody td.pct{ width:9%; }
   tbody td{
     text-align:right;
     padding:9px 14px;
     border-bottom:1px solid var(--line-soft);
     color:var(--paper);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
   }
   tbody tr:hover{ background:var(--panel-2); }
   tbody td.fv{ color:var(--gold); }
+  tbody td.pct{ color:var(--paper-dim); }
 
 </style>
+
 </head>
 <body>
 
@@ -435,7 +443,7 @@
 
     <div class="table-wrap">
       <div class="chart-title">Year-by-year contribution detail</div>
-      <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement.</div>
+      <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement. % of pot = that year's future value as a share of all contribution future values combined.</div>
       <div class="table-scroll">
         <table id="year-table">
           <thead>
@@ -444,7 +452,8 @@
               <th>Salary</th>
               <th>Savings %</th>
               <th>Savings amount</th>
-              <th>Future value at retirement</th>
+              <th class="col-fv">Future value</th>
+              <th class="col-pct">% of pot</th>
             </tr>
           </thead>
           <tbody id="year-table-body"></tbody>
@@ -599,12 +608,17 @@
     const swrPctOfFinalSalary = finalTakeHome > 0 ? (swrIncome / finalTakeHome) * 100 : null;
 
     let peakRow = null;
+    let totalFutureValue = 0;
     for (const row of yearRows){
+      totalFutureValue += row.futureValue;
       if (!peakRow || row.futureValue > peakRow.futureValue) peakRow = row;
+    }
+    for (const row of yearRows){
+      row.pctOfPot = totalFutureValue > 0 ? (row.futureValue / totalFutureValue) * 100 : 0;
     }
 
     return {
-      ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows, peakRow,
+      ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows, peakRow, totalFutureValue,
       finalYearSalary, finalYearContribution, finalYearRate, finalTakeHome, swrIncome, swrPctOfFinalSalary
     };
   }
@@ -648,6 +662,7 @@
         '<td>' + (row.rate * 100).toFixed(1) + '%</td>' +
         '<td>' + fmtMoney(row.contribution) + '</td>' +
         '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
+        '<td class="pct">' + row.pctOfPot.toFixed(1) + '%</td>' +
       '</tr>'
     )).join('');
 
