@@ -515,6 +515,7 @@
         <div class="stat-label">SWR retirement income, in today's terms</div>
         <div class="stat-value" id="stat-swr-real">—</div>
         <div class="stat-foot" id="stat-swr-real-foot">—</div>
+        <div class="stat-foot" id="stat-swr-real-tax-note">—</div>
       </div>
     </div>
 
@@ -892,6 +893,10 @@
     document.getElementById('stat-swr-real').textContent = fmtMoney(realSwrIncome) + '/yr';
     document.getElementById('stat-swr-real-foot').textContent =
       'Net nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncomeNet) + '/yr';
+    const realSwrTax = data.swrTax / Math.pow(1 + inflationRate, yearsToRetirement);
+    document.getElementById('stat-swr-real-tax-note').textContent = taxTreatment === 'pretax'
+      ? 'Ordinary income tax removed: ' + fmtMoney(realSwrTax) + '/yr (Traditional)'
+      : 'No tax removed — Roth withdrawals are tax-free';
 
     document.getElementById('stat-final').textContent = fmtMoney(data.final);
     document.getElementById('stat-contrib').textContent = fmtMoney(data.totalContrib + parseFloat(els.balance.value || 0));
