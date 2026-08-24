@@ -149,8 +149,12 @@
     font-family:'IBM Plex Mono', monospace;
     font-size:0.7rem;
     color:var(--paper-dim);
-    margin-top:8px;
+    margin-top:10px;
+    line-height:1.7;
   }
+  .stat.wide{ grid-column:span 2; }
+  @media (max-width:900px){ .stat.wide{ grid-column:span 2; } }
+  @media (max-width:600px){ .stat.wide{ grid-column:span 1; } }
   .stat{
     background:var(--panel);
     padding:22px 24px;
@@ -278,7 +282,7 @@
         <div class="stat-label">Total investment growth</div>
         <div class="stat-value" id="stat-growth">—</div>
       </div>
-      <div class="stat gold">
+      <div class="stat gold wide">
         <div class="stat-label">Retirement income at 4% SWR</div>
         <div class="stat-value" id="stat-swr-pct">—</div>
         <div class="stat-foot" id="stat-swr-detail">—</div>
@@ -394,8 +398,11 @@
 
     if (data.swrPctOfFinalSalary !== null){
       document.getElementById('stat-swr-pct').textContent = Math.round(data.swrPctOfFinalSalary) + '%';
-      document.getElementById('stat-swr-detail').textContent =
-        fmtMoney(data.swrIncome) + '/yr vs ' + fmtMoney(data.finalTakeHome) + ' take-home';
+      document.getElementById('stat-swr-detail').innerHTML =
+        'Final salary: ' + fmtMoney(data.finalYearSalary) + '<br>' +
+        'Savings rate: ' + els.savingsRate.value + '% (' + fmtMoney(data.finalYearContribution) + ')<br>' +
+        'Take-home: ' + fmtMoney(data.finalTakeHome) + '<br>' +
+        '4% SWR income: ' + fmtMoney(data.swrIncome) + '/yr';
     } else {
       document.getElementById('stat-swr-pct').textContent = '—';
       document.getElementById('stat-swr-detail').textContent = 'n/a';
