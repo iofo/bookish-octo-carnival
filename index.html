@@ -587,6 +587,7 @@
       <div class="tax-disclaimer">
         Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, credits, and other deductions — not tax advice.
         Pre-tax (Traditional) reduces that year's taxable income by the savings amount before computing tax, matching a traditional 401(k)/IRA. After-tax (Roth) taxes the full salary and contributes what's left after tax, matching a Roth account.
+        Net take-home also subtracts an estimated 2026 FICA tax (6.2% Social Security up to the $184,500 wage base, plus 1.45–2.35% Medicare), applied to gross wages regardless of the pre-tax/Roth toggle — this affects only the net take-home figure, not the Federal tax column or any withdrawal-year calculations.
       </div>
       <div class="table-scroll">
         <table id="year-table">
@@ -695,6 +696,29 @@
     return tax;
   }
 
+  // FICA (Social Security + Medicare), 2026 employee-side rates. Applies to gross
+  // wages regardless of pre-tax/Roth treatment — 401(k)/IRA contributions reduce
+  // federal taxable income but not the FICA wage base. Used only to make the
+  // table's net take-home figure more accurate; it doesn't feed into the
+  // "Federal tax" column or any other stat on the page.
+  const FICA_SS_RATE = 0.062;
+  const FICA_MEDICARE_RATE = 0.0145;
+  const FICA_ADDL_MEDICARE_RATE = 0.009;
+  const FICA_SS_WAGE_BASE_2026 = 184500;
+  const FICA_ADDL_MEDICARE_THRESHOLD_2026 = 200000; // single filer
+
+  function estimateFicaTax(grossSalary, yearsFromNow, inflationRate){
+    const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
+    const ssWageBase = FICA_SS_WAGE_BASE_2026 * inflationFactor;
+    const addlThreshold = FICA_ADDL_MEDICARE_THRESHOLD_2026 * inflationFactor;
+
+    const socialSecurityTax = Math.min(grossSalary, ssWageBase) * FICA_SS_RATE;
+    const medicareTax = grossSalary * FICA_MEDICARE_RATE;
+    const additionalMedicareTax = Math.max(grossSalary - addlThreshold, 0) * FICA_ADDL_MEDICARE_RATE;
+
+    return socialSecurityTax + medicareTax + additionalMedicareTax;
+  }
+
   function project(){
     let age = parseInt(els.age.value);
     let retireAge = parseInt(els.retireAge.value);
@@ -768,7 +792,9 @@
       // After-tax (Roth): tax is computed on the full salary, then the contribution comes out of what's left.
       const taxableSalary = taxTreatment === 'pretax' ? Math.max(salary - contribution, 0) : salary;
       const federalTax = estimateFederalTax(taxableSalary, yearsFromNow, inflation);
-      const netTakeHome = salary - federalTax - contribution;
+      // FICA is always on gross salary, unaffected by the pretax/Roth toggle.
+      const ficaTax = estimateFicaTax(salary, yearsFromNow, inflation);
+      const netTakeHome = salary - federalTax - ficaTax - contribution;
 
       yearRows.push({
         age: ageThisYear,
@@ -777,6 +803,7 @@
         contribution: contribution,
         futureValue: contributionFutureValue,
         federalTax: federalTax,
+        ficaTax: ficaTax,
         netTakeHome: netTakeHome
       });
 
