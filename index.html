@@ -531,6 +531,14 @@
       <input type="range" id="returnRate" min="0" max="12" value="4" step="0.25">
     </div>
 
+    <div class="field">
+      <label>Qualified dividend yield <span class="val" id="val-dividendYield">2%</span></label>
+      <input type="range" id="dividendYield" min="0" max="6" value="2" step="0.25">
+    </div>
+    <p class="section-help-text">
+      Share of the total return paid out as qualified dividends each year. Only affects the Taxable (Brokerage) option — dividends are taxed annually at capital gains rates, so only the after-tax portion gets reinvested. Traditional and Roth are unaffected, since neither is taxed on internal account activity.
+    </p>
+
     <hr class="divider">
     <button type="button" class="btn-reset" id="reset-btn">Reset to defaults</button>
   </div>
@@ -796,6 +804,7 @@
     lateCap: document.getElementById('lateCap'),
     lateGrowth: document.getElementById('lateGrowth'),
     returnRate: document.getElementById('returnRate'),
+    dividendYield: document.getElementById('dividendYield'),
   };
   const valEls = {
     age: document.getElementById('val-age'),
@@ -808,6 +817,7 @@
     lateCap: document.getElementById('val-lateCap'),
     lateGrowth: document.getElementById('val-lateGrowth'),
     returnRate: document.getElementById('val-returnRate'),
+    dividendYield: document.getElementById('val-dividendYield'),
   };
 
   // The HTML's own `value="..."` attributes are the single source of truth
@@ -851,21 +861,39 @@
   // Bracket thresholds and the standard deduction are assumed to rise with
   // inflation each year (as the IRS does in practice); the rates themselves
   // are held fixed at their 2026 levels for the whole projection.
-  function estimateFederalTax(grossSalary, yearsFromNow, inflationRate){
-    const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
-    const deduction = FEDERAL_STANDARD_DEDUCTION_2026_SINGLE * inflationFactor;
-    const taxableIncome = Math.max(grossSalary - deduction, 0);
 
+  // Shared bracket-walking logic: tax owed on `amount` dollars of income that
+  // sit on top of `baseIncome` dollars already taxed (baseIncome = 0 for a
+  // standalone calculation, or a stacked amount for e.g. dividends sitting on
+  // top of salary). Used by every progressive-bracket calculation below so
+  // the walking logic itself is written exactly once.
+  function taxOnStackedIncome(brackets, baseIncome, amount, inflationFactor){
+    if (amount <= 0) return 0;
+    const rangeLow = baseIncome;
+    const rangeHigh = baseIncome + amount;
     let tax = 0;
     let prevCap = 0;
-    for (const bracket of FEDERAL_BRACKETS_2026_SINGLE){
+    for (const bracket of brackets){
       const cap = bracket.upTo === Infinity ? Infinity : bracket.upTo * inflationFactor;
-      if (taxableIncome <= prevCap) break;
-      const amountInBracket = Math.min(taxableIncome, cap) - prevCap;
-      tax += amountInBracket * bracket.rate;
+      const segmentLow = Math.max(rangeLow, prevCap);
+      const segmentHigh = Math.min(rangeHigh, cap);
+      if (segmentHigh > segmentLow){
+        tax += (segmentHigh - segmentLow) * bracket.rate;
+      }
       prevCap = cap;
+      if (prevCap >= rangeHigh) break;
     }
     return tax;
+  }
+
+  function inflatedStandardDeduction(yearsFromNow, inflationRate){
+    return FEDERAL_STANDARD_DEDUCTION_2026_SINGLE * Math.pow(1 + inflationRate, yearsFromNow);
+  }
+
+  function estimateFederalTax(grossSalary, yearsFromNow, inflationRate){
+    const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
+    const taxableIncome = Math.max(grossSalary - inflatedStandardDeduction(yearsFromNow, inflationRate), 0);
+    return taxOnStackedIncome(FEDERAL_BRACKETS_2026_SINGLE, 0, taxableIncome, inflationFactor);
   }
 
   function estimateFicaTax(grossSalary, yearsFromNow, inflationRate){
@@ -885,28 +913,30 @@
   // deduction offsets the gain before the 0/15/20% brackets apply.
   function estimateCapitalGainsTax(realizedGain, yearsFromNow, inflationRate){
     const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
-    const deduction = FEDERAL_STANDARD_DEDUCTION_2026_SINGLE * inflationFactor;
-    const taxableGain = Math.max(realizedGain - deduction, 0);
-
-    let tax = 0;
-    let prevCap = 0;
-    for (const bracket of LTCG_BRACKETS_2026_SINGLE){
-      const cap = bracket.upTo === Infinity ? Infinity : bracket.upTo * inflationFactor;
-      if (taxableGain <= prevCap) break;
-      const amountInBracket = Math.min(taxableGain, cap) - prevCap;
-      tax += amountInBracket * bracket.rate;
-      prevCap = cap;
-    }
-    return tax;
+    const taxableGain = Math.max(realizedGain - inflatedStandardDeduction(yearsFromNow, inflationRate), 0);
+    return taxOnStackedIncome(LTCG_BRACKETS_2026_SINGLE, 0, taxableGain, inflationFactor);
   }
 
   // Net Investment Income Tax: 3.8% on the lesser of net investment income or
-  // the amount MAGI exceeds the (fixed, non-inflated) threshold. This model
-  // treats the realized capital gain itself as both the investment income and
-  // the whole of MAGI, since it assumes no other income in retirement.
-  function estimateNiit(realizedGain){
-    const excessOverThreshold = Math.max(realizedGain - NIIT_THRESHOLD_SINGLE, 0);
-    return NIIT_RATE * Math.min(realizedGain, excessOverThreshold);
+  // the amount MAGI exceeds the (fixed, non-inflated) threshold.
+  function estimateNiit(netInvestmentIncome, otherMagi){
+    const magi = (otherMagi || 0) + netInvestmentIncome;
+    const excessOverThreshold = Math.max(magi - NIIT_THRESHOLD_SINGLE, 0);
+    return NIIT_RATE * Math.min(netInvestmentIncome, excessOverThreshold);
+  }
+
+  // Qualified dividends are taxed like long-term capital gains, but during
+  // working years they stack on top of ordinary taxable income (salary net of
+  // the standard deduction) rather than starting from zero — e.g. someone
+  // already in the 22% ordinary bracket doesn't get to use the 0% LTCG band.
+  // Applies only to the Taxable (Brokerage) option; Traditional and Roth
+  // wrappers shield internal account activity from tax entirely.
+  function estimateQualifiedDividendTax(dividendIncome, ordinaryTaxableIncome, yearsFromNow, inflationRate){
+    if (dividendIncome <= 0) return 0;
+    const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
+    const ltcgTax = taxOnStackedIncome(LTCG_BRACKETS_2026_SINGLE, ordinaryTaxableIncome, dividendIncome, inflationFactor);
+    const niit = estimateNiit(dividendIncome, ordinaryTaxableIncome);
+    return ltcgTax + niit;
   }
 
   // =====================================================================
@@ -954,9 +984,15 @@
     let salary = salary0;
     let totalContrib = 0;
     let totalGrowth = 0;
+    let totalDividendsReinvested = 0; // after-tax dividends that stayed invested — counts toward cost basis
     let finalYearSalary = salary0;
     let finalYearContribution = 0;
     let finalYearRate = 0;
+
+    const dividendYield = parseFloat(els.dividendYield.value) / 100;
+    // What share of a given period's total growth is the dividend portion,
+    // vs. price appreciation. Dividend yield can't exceed the total return.
+    const dividendShareOfReturn = returnRate > 0 ? Math.min(dividendYield / returnRate, 1) : 0;
 
     for (let y = 1; y <= years; y++){
       const ageThisYear = age + y - 1;
@@ -1003,13 +1039,28 @@
       const monthlyContribution = contribution / MONTHS_PER_YEAR;
       const monthlyReturn = Math.pow(1 + returnRate, 1 / MONTHS_PER_YEAR) - 1;
       let growthThisYear = 0;
+      let dividendIncomeThisYear = 0;
       for (let m = 0; m < MONTHS_PER_YEAR; m++){
         const growthThisMonth = balance * monthlyReturn;
         balance = balance + growthThisMonth + monthlyContribution;
         growthThisYear += growthThisMonth;
+        dividendIncomeThisYear += growthThisMonth * dividendShareOfReturn;
       }
+
+      // Tax drag: in a Taxable (Brokerage) account, qualified dividends are taxed
+      // in the year they're received, so only the after-tax portion actually stays
+      // invested — the tax leaks out of the compounding rather than deferring like
+      // price appreciation does. Traditional and Roth wrappers are unaffected.
+      let dividendTaxThisYear = 0;
+      if (taxTreatment === TAX_TREATMENT_TAXABLE && dividendIncomeThisYear > 0){
+        const ordinaryTaxableIncome = Math.max(salary - inflatedStandardDeduction(yearsFromNow, inflation), 0);
+        dividendTaxThisYear = estimateQualifiedDividendTax(dividendIncomeThisYear, ordinaryTaxableIncome, yearsFromNow, inflation);
+        balance -= dividendTaxThisYear;
+        totalDividendsReinvested += dividendIncomeThisYear - dividendTaxThisYear;
+      }
+
       totalContrib += contribution;
-      totalGrowth += growthThisYear;
+      totalGrowth += growthThisYear - dividendTaxThisYear;
 
       finalYearSalary = salary;
       finalYearContribution = contribution;
@@ -1055,11 +1106,12 @@
     if (taxTreatment === TAX_TREATMENT_PRETAX){
       swrTax = estimateFederalTax(swrIncomeGross, yearsToRetirementTotal, inflation);
     } else if (taxTreatment === TAX_TREATMENT_TAXABLE){
-      // Cost basis = starting balance plus everything contributed along the way.
-      // Each withdrawal is assumed to carry gain in the same proportion as the
-      // account's overall gain-to-balance ratio (a pro-rata realization, not a
-      // specific-lot sale).
-      const basis = balance0 + totalContrib;
+      // Cost basis = starting balance, everything contributed, and any
+      // reinvested dividends (already taxed in the year received, so they
+      // shouldn't be taxed again as gain here). Each withdrawal is assumed to
+      // carry gain in the same proportion as the account's overall
+      // gain-to-balance ratio (a pro-rata realization, not a specific-lot sale).
+      const basis = balance0 + totalContrib + totalDividendsReinvested;
       const gainFraction = balance > 0 ? Math.max(0, (balance - basis) / balance) : 0;
       swrTaxableGainPortion = swrIncomeGross * gainFraction;
       const capitalGainsTax = estimateCapitalGainsTax(swrTaxableGainPortion, yearsToRetirementTotal, inflation);
@@ -1105,6 +1157,7 @@
     valEls.lateCap.textContent = els.lateCap.value + '%';
     valEls.lateGrowth.textContent = els.lateGrowth.value + '%';
     valEls.returnRate.textContent = els.returnRate.value + '%';
+    valEls.dividendYield.textContent = els.dividendYield.value + '%';
   }
 
   // Single source of truth for how each contribution type is described at
