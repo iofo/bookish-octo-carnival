@@ -243,20 +243,28 @@ function costRealFieldForUnit(row){
 }
 
 function renderTable(data){
-  setHTML('year-table-body', data.yearRows.map(row => (
-    '<tr>' +
-      '<td class="age">' + row.age + '</td>' +
-      '<td>' + fmtMoney(row.salary) + '</td>' +
-      '<td class="tax">' + fmtMoney(row.federalTax) + '</td>' +
-      '<td class="tax">' + fmtMoney(row.ficaTax) + '</td>' +
-      '<td>' + fmtPct(row.rate * 100) + '</td>' +
-      '<td>' + fmtMoney(row.contribution) + '</td>' +
-      '<td class="net">' + fmtMoney(row.netTakeHome) + '</td>' +
-      '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
-      '<td class="pct">' + fmtPct(row.pctOfPot) + '</td>' +
-      '<td class="cost">' + fmtMoney(costFieldForUnit(row)) + '</td>' +
-    '</tr>'
-  )).join(''));
+  setHTML('year-table-body', data.yearRows.map(row => {
+    // Federal tax and FICA are combined into one displayed cell — the
+    // underlying computation keeps them entirely separate (row.federalTax
+    // and row.ficaTax are independent fields from the engine; this only
+    // sums them for display). A title attribute preserves the breakdown
+    // as a native hover tooltip without spending extra column width on it.
+    const combinedTax = row.federalTax + row.ficaTax;
+    const taxBreakdown = 'Federal: ' + fmtMoney(row.federalTax) + ' · FICA: ' + fmtMoney(row.ficaTax);
+    return (
+      '<tr>' +
+        '<td class="age">' + row.age + '</td>' +
+        '<td>' + fmtMoney(row.salary) + '</td>' +
+        '<td class="tax" title="' + taxBreakdown + '">' + fmtMoney(combinedTax) + '</td>' +
+        '<td>' + fmtPct(row.rate * 100) + '</td>' +
+        '<td>' + fmtMoney(row.contribution) + '</td>' +
+        '<td class="net">' + fmtMoney(row.netTakeHome) + '</td>' +
+        '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
+        '<td class="pct">' + fmtPct(row.pctOfPot) + '</td>' +
+        '<td class="cost">' + fmtMoney(costFieldForUnit(row)) + '</td>' +
+      '</tr>'
+    );
+  }).join(''));
 
   if (data.peakRow){
     setText('peak-fv', fmtMoney(data.peakRow.futureValue));
