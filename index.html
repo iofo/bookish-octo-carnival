@@ -262,6 +262,14 @@
   }
   .chart-canvas-holder{ height:420px; }
 
+  .table-resize-hint{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.03em;
+    color:var(--paper-dim);
+    margin:-12px 0 16px;
+  }
+
   .legend-row{
     display:flex;
     gap:24px;
@@ -506,13 +514,27 @@
     position:absolute;
     top:0;
     right:0;
-    width:8px;
+    width:10px;
     height:100%;
     cursor:col-resize;
     background:transparent;
-    transition:background 0.15s ease;
   }
-  .col-resize-handle:hover, .col-resize-handle.resizing{ background:var(--gold); }
+  .col-resize-handle::after{
+    content:'';
+    position:absolute;
+    top:22%;
+    bottom:22%;
+    right:3px;
+    width:2px;
+    background:var(--paper-dim);
+    opacity:0.45;
+    border-radius:1px;
+    transition:background 0.15s ease, opacity 0.15s ease;
+  }
+  .col-resize-handle:hover::after, .col-resize-handle.resizing::after{
+    background:var(--gold);
+    opacity:1;
+  }
   body.col-resizing{ user-select:none; cursor:col-resize; }
   tbody td{
     text-align:right;
@@ -777,6 +799,7 @@
     <div class="table-wrap">
       <div class="chart-title">Year-by-year contribution detail</div>
       <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement. % of pot = that year's future value as a share of all contribution future values combined.</div>
+      <div class="table-resize-hint">↔ Drag the edge of any column header to resize it.</div>
 
       <div class="tax-disclaimer">
         Federal tax is an estimate only: single-filer, 2026 IRS brackets and standard deduction ($16,100), with the deduction and bracket thresholds assumed to rise with inflation while the rates themselves stay fixed. It ignores state/local tax, filing status, credits, and other deductions — not tax advice.
