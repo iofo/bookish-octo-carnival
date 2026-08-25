@@ -480,8 +480,7 @@
     border-top:1px solid var(--line);
   }
   table{
-    width:100%;
-    min-width:880px;
+    width:auto;
     table-layout:fixed;
     border-collapse:collapse;
     font-family:'IBM Plex Mono', monospace;
@@ -497,16 +496,25 @@
     font-size:0.7rem;
     letter-spacing:0.08em;
     text-transform:uppercase;
-    padding:10px 14px;
+    padding:10px 16px 10px 14px;
     border-bottom:1px solid var(--line);
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
   }
   thead th:first-child, tbody td:first-child{ text-align:left; }
-  thead th.col-age, tbody td.age{ width:5%; }
-  thead th.col-fv, tbody td.fv{ width:12%; }
-  thead th.col-pct, tbody td.pct{ width:9%; }
-  thead th.col-cost, tbody td.cost{ width:11%; }
-  thead th.col-tax, tbody td.tax{ width:13%; }
-  thead th.col-net, tbody td.net{ width:13%; }
+  .col-resize-handle{
+    position:absolute;
+    top:0;
+    right:0;
+    width:8px;
+    height:100%;
+    cursor:col-resize;
+    background:transparent;
+    transition:background 0.15s ease;
+  }
+  .col-resize-handle:hover, .col-resize-handle.resizing{ background:var(--gold); }
+  body.col-resizing{ user-select:none; cursor:col-resize; }
   tbody td{
     text-align:right;
     padding:9px 14px;
@@ -781,6 +789,18 @@
       </div>
       <div class="table-scroll">
         <table id="year-table">
+          <colgroup>
+            <col style="width:3ch">
+            <col style="width:10ch">
+            <col style="width:8ch">
+            <col style="width:7ch">
+            <col style="width:6ch">
+            <col style="width:7ch">
+            <col style="width:8ch">
+            <col style="width:11ch">
+            <col style="width:6ch">
+            <col style="width:10ch">
+          </colgroup>
           <thead>
             <tr>
               <th class="col-age">Age</th>
