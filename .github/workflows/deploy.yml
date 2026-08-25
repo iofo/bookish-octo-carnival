@@ -8,6 +8,14 @@ name: Deploy to GitHub Pages
 # matches `git log --oneline -1` locally, Pages is caught up; if it
 # doesn't, a deploy is still in flight or something's stuck.
 #
+# It also stamps that same SHA onto engine.js/ui.js as a cache-busting
+# query string (?v=SHA). Without this, browsers/CDNs can keep serving a
+# cached copy of the JS after a deploy even though index.html itself
+# updates immediately — which looks exactly like a broken feature (new
+# markup shows up, but nothing populates it) when it's actually just a
+# stale script. Bumping the query string on every deploy forces a fresh
+# fetch of both JS files every time, without needing anyone to hard-refresh.
+#
 # Action versions below are pinned to their current Node.js 24-compatible
 # majors (checked against each action's own release notes as of August
 # 2026 — see actions/upload-pages-artifact#138/#139 and
@@ -53,6 +61,11 @@ jobs:
           SHORT_SHA=$(git rev-parse --short HEAD)
           BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           sed -i "s|id=\"build-info\">local / unbuilt<|id=\"build-info\">${SHORT_SHA} · deployed ${BUILD_DATE}<|" index.html
+
+      - name: Cache-bust engine.js and ui.js
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          sed -i "s|BUILD_SHA_PLACEHOLDER|${SHORT_SHA}|g" index.html
 
       - name: Upload site as a Pages artifact
         uses: actions/upload-pages-artifact@v5
