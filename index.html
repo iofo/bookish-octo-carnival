@@ -661,7 +661,7 @@
         FICA (est.) is 2026 Social Security (6.2% up to the $184,500 wage base) plus Medicare (1.45–2.35%), applied to gross wages regardless of the contribution-type toggle. Both Federal tax and FICA are subtracted to get net take-home; FICA never affects any other figure on the page.
         Equalize net pay (Roth/Taxable only): reduces the contribution amount so that year's net take-home matches what Pre-tax would give at the same savings-rate schedule. The Savings % and Savings amount columns reflect this adjusted, smaller contribution — which is why Roth/Taxable balances often end up lower than Traditional ones for the "same" paycheck impact.
         Taxable (Brokerage) withdrawal tax: assumes a buy-and-hold account where gains are only realized at withdrawal, taxed as 2026 long-term capital gains (0%/15%/20% brackets, inflation-adjusted) plus the 3.8% Net Investment Income Tax above $200,000 MAGI (a fixed threshold — by law it has never been inflation-indexed). Each year's withdrawal is assumed to carry gain in the same proportion as the account's overall gain-to-balance ratio; your original contributions come back tax-free as return of basis.
-        401(k) contribution limit: Pre-tax and Roth are capped at the 2026 IRS employee deferral limit ($24,500, plus $8,000 more from age 50+), both inflation-adjusted — if your savings-rate schedule calls for more than that in a given year, the excess simply isn't contributed. Taxable (Brokerage) has no such legal limit and always follows the full schedule.
+        401(k) contribution limit: Pre-tax and Roth are capped at the 2026 IRS employee deferral limit ($24,500, plus a $8,000 catch-up from age 50, rising to an $11,250 "super catch-up" for ages 60–63 before reverting to $8,000 at 64+), all inflation-adjusted — if your savings-rate schedule calls for more than that in a given year, the excess simply isn't contributed. Taxable (Brokerage) has no such legal limit and always follows the full schedule.
       </div>
       <div class="table-scroll">
         <table id="year-table">
@@ -747,15 +747,18 @@
   const NIIT_THRESHOLD_SINGLE = 200000;
 
   // 2026 employee elective deferral limit for 401(k)/403(b) plans (IRC §402(g),
-  // per IRS Notice 2025-67), plus the standard age-50+ catch-up. Both are
-  // inflation-adjusted in real life and are here too. This model doesn't
-  // implement the separate SECURE 2.0 "super catch-up" for ages 60-63 — just
-  // the standard two-tier limit. Applies only to Pre-tax and Roth (both are
-  // 401(k)-style employee deferrals); a Taxable brokerage account has no such
-  // legal cap.
+  // per IRS Notice 2025-67), plus catch-ups. Standard catch-up applies at 50+;
+  // SECURE 2.0's "super catch-up" replaces it (doesn't stack on top of it) for
+  // anyone who turns 60, 61, 62, or 63 during the year, then reverts to the
+  // standard catch-up at 64+. All figures are inflation-adjusted here, same as
+  // in real life. Applies only to Pre-tax and Roth (both are 401(k)-style
+  // employee deferrals); a Taxable brokerage account has no such legal cap.
   const EMPLOYEE_401K_LIMIT_2026 = 24500;
   const CATCHUP_401K_LIMIT_2026 = 8000;
   const CATCHUP_401K_AGE = 50;
+  const SUPER_CATCHUP_401K_LIMIT_2026 = 11250;
+  const SUPER_CATCHUP_401K_AGE_MIN = 60;
+  const SUPER_CATCHUP_401K_AGE_MAX = 63;
 
   // Tax treatment options for the contribution-type toggle.
   const TAX_TREATMENT_PRETAX = 'pretax';
@@ -878,7 +881,14 @@
   function employee401kLimitForAge(age, yearsFromNow, inflationRate){
     const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
     const base = EMPLOYEE_401K_LIMIT_2026 * inflationFactor;
-    const catchup = age >= CATCHUP_401K_AGE ? CATCHUP_401K_LIMIT_2026 * inflationFactor : 0;
+
+    let catchup = 0;
+    if (age >= SUPER_CATCHUP_401K_AGE_MIN && age <= SUPER_CATCHUP_401K_AGE_MAX){
+      catchup = SUPER_CATCHUP_401K_LIMIT_2026 * inflationFactor; // replaces, doesn't stack with, the standard catch-up
+    } else if (age >= CATCHUP_401K_AGE){
+      catchup = CATCHUP_401K_LIMIT_2026 * inflationFactor;
+    }
+
     return base + catchup;
   }
 
