@@ -276,10 +276,11 @@ function renderTable(data){
 // they disagree.
 function renderCostPanel(data){
   const unitLabel = costUnit === 'day' ? 'day' : 'month';
-  setText('col-cost-header', 'Cost: 1 ' + unitLabel + ' (nominal)');
+  setText('col-cost-header', 'Cost: 1 ' + unitLabel + '/yr (nominal)');
   setText('cost-panel-sub',
-    'What it costs, in today\'s dollars, to fund exactly one ' + unitLabel +
-    ' of your final salary as retirement income — contributed at a few different starting ages, then compounded to retirement.');
+    'What it costs, in today\'s dollars, to fund one ' + unitLabel + '\'s worth of your final salary as ' +
+    'annual retirement income — received every year of retirement, not just once — contributed at a few ' +
+    'different starting ages, then compounded to retirement.');
 
   const rows = data.yearRows;
   if (!rows.length){
@@ -313,8 +314,8 @@ function renderCostPanel(data){
   const multiple = firstCost > 0 ? lastCost / firstCost : null;
 
   setHTML('cost-panel-callout',
-    'At age ' + first.age + ', buying one ' + unitLabel + ' of your final salary in retirement income costs ' +
-    '<strong>' + fmtMoney(firstCost) + '</strong> in today\'s dollars. Wait until ' + last.age + ', and the same ' + unitLabel + ' costs ' +
+    'At age ' + first.age + ', buying one ' + unitLabel + '\'s worth of your final salary as annual retirement income (every year, not just once) costs ' +
+    '<strong>' + fmtMoney(firstCost) + '</strong> in today\'s dollars. Wait until ' + last.age + ', and the same ' + unitLabel + '\'s worth costs ' +
     '<strong>' + fmtMoney(lastCost) + '</strong>' +
     (multiple !== null ? ' — ' + multiple.toFixed(1) + 'x as much, even after adjusting for inflation.' : ' in today\'s dollars.'));
 }
