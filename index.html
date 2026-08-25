@@ -323,6 +323,60 @@
     .peak-figures{ gap:28px; }
   }
 
+  .cost-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--teal);
+    padding:28px 28px;
+    margin-top:28px;
+  }
+  .cost-panel-title-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+    margin-bottom:4px;
+  }
+  .cost-panel-title-row .chart-title{ margin-bottom:0; }
+  #cost-panel-sub{ margin-bottom:22px; }
+  .cost-figures{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    margin-bottom:18px;
+  }
+  .cost-stat{
+    background:var(--panel-2);
+    padding:18px 20px;
+  }
+  .cost-stat .stat-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.68rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--paper-dim);
+    margin-bottom:8px;
+  }
+  .cost-stat .stat-value{
+    font-family:'Newsreader', serif;
+    font-size:1.5rem;
+    font-weight:500;
+    color:var(--teal);
+  }
+  .cost-panel-callout{
+    margin:0;
+    padding:0;
+    background:none;
+    border:none;
+    color:var(--paper);
+    font-size:0.86rem;
+    line-height:1.6;
+  }
+  .cost-panel-callout strong{ color:var(--gold); font-weight:600; }
+
   .swr-panel{
     background:var(--panel);
     border:1px solid var(--line);
@@ -418,7 +472,7 @@
   }
   table{
     width:100%;
-    min-width:780px;
+    min-width:880px;
     table-layout:fixed;
     border-collapse:collapse;
     font-family:'IBM Plex Mono', monospace;
@@ -441,6 +495,7 @@
   thead th.col-age, tbody td.age{ width:5%; }
   thead th.col-fv, tbody td.fv{ width:12%; }
   thead th.col-pct, tbody td.pct{ width:9%; }
+  thead th.col-cost, tbody td.cost{ width:11%; }
   thead th.col-tax, tbody td.tax{ width:13%; }
   thead th.col-net, tbody td.net{ width:13%; }
   tbody td{
@@ -455,6 +510,7 @@
   tbody tr:hover{ background:var(--panel-2); }
   tbody td.fv{ color:var(--gold); }
   tbody td.pct{ color:var(--paper-dim); }
+  tbody td.cost{ color:var(--teal); }
   tbody td.tax{ color:var(--terracotta); }
   tbody td.net{ color:var(--paper); font-weight:500; }
 
@@ -678,6 +734,21 @@
       </div>
     </div>
 
+    <div class="cost-panel">
+      <div class="cost-panel-header">
+        <div class="cost-panel-title-row">
+          <div class="chart-title">The cost of waiting</div>
+          <div class="tax-toggle" role="tablist">
+            <button type="button" class="toggle-btn active" id="toggle-cost-day" role="tab" aria-selected="true">Per day</button>
+            <button type="button" class="toggle-btn" id="toggle-cost-month" role="tab" aria-selected="false">Per month</button>
+          </div>
+        </div>
+        <div class="chart-sub" id="cost-panel-sub">What it costs — contributed today, compounded to retirement — to fund exactly one day of your final salary as retirement income, at a few different starting ages.</div>
+      </div>
+      <div class="cost-figures" id="cost-figures"></div>
+      <p class="section-help-text cost-panel-callout" id="cost-panel-callout">—</p>
+    </div>
+
     <div class="table-wrap">
       <div class="chart-title">Year-by-year contribution detail</div>
       <div class="chart-sub">Future value = that year's savings amount, compounded at the expected return until retirement. % of pot = that year's future value as a share of all contribution future values combined.</div>
@@ -703,6 +774,7 @@
               <th class="col-net">Net take-home</th>
               <th class="col-fv">Future value</th>
               <th class="col-pct">% of pot</th>
+              <th class="col-cost" id="col-cost-header">Cost: 1 day</th>
             </tr>
           </thead>
           <tbody id="year-table-body"></tbody>

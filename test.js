@@ -340,6 +340,38 @@ test('the 401(k) catch-up correctly raises the cap at exactly age 50', () => {
   assertApprox(at50.contribution, 32500, 1);
 });
 
+section('runProjection — cost of buying a day/month of final salary');
+
+test('cost to buy 1 day, known reference figure at the default scenario', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const first = result.yearRows[0];
+  assertApprox(first.costToBuyOneDay, 658, 5);
+});
+
+test('cost to buy 1 month is exactly 365/12 times the cost to buy 1 day, for the same row', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  result.yearRows.forEach(row => {
+    assertApprox(row.costToBuyOneMonth, row.costToBuyOneDay * (365 / 12), 1);
+  });
+});
+
+test('cost rises monotonically as retirement approaches (less time left to compound)', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  for (let i = 1; i < result.yearRows.length; i++){
+    assert.ok(
+      result.yearRows[i].costToBuyOneDay > result.yearRows[i - 1].costToBuyOneDay,
+      `expected cost to rise from age ${result.yearRows[i-1].age} to ${result.yearRows[i].age}`
+    );
+  }
+});
+
+test('the final working year costs meaningfully more than the first (illustrates time-in-market)', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const first = result.yearRows[0];
+  const last = result.yearRows[result.yearRows.length - 1];
+  assert.ok(last.costToBuyOneDay > first.costToBuyOneDay * 10, 'expected at least a 10x gap between first and last working year');
+});
+
 section('runProjection — configurable SWR rate');
 
 test('SWR gross income scales exactly with swrRate (same balance, different withdrawal %)', () => {

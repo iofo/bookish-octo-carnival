@@ -39,6 +39,7 @@ const RetirementEngine = (function(){
   const SWR_RATE = 0.04;
 
   const MONTHS_PER_YEAR = 12;
+  const DAYS_PER_YEAR = 365;
 
   // 2026 US federal income tax, single filer (IRS Rev. Proc. 2025-32).
   // Estimate only — see the disclaimer rendered above the table in the UI.
@@ -458,6 +459,21 @@ const RetirementEngine = (function(){
       row.pctOfPot = totalFutureValue > 0 ? (row.futureValue / totalFutureValue) * 100 : 0;
     }
 
+    // "Cost to buy a day/month of final salary" — the lump sum that, contributed
+    // at a given age and compounded at the assumed return, would grow to exactly
+    // fund one day's (or one month's) worth of final-salary-equivalent income via
+    // the SWR rule. Illustrates time-in-the-market directly: compounding has less
+    // time to work in later years, so the same "day" of future income costs more
+    // to buy the closer you are to retirement when you buy it.
+    const dailyIncomeTarget = finalYearSalary / DAYS_PER_YEAR / swrRate;
+    const monthlyIncomeTarget = finalYearSalary / MONTHS_PER_YEAR / swrRate;
+    for (const row of yearRows){
+      const yearsToRetirementForRow = retireAge - row.age;
+      const discountFactor = Math.pow(1 + returnRate, yearsToRetirementForRow);
+      row.costToBuyOneDay = dailyIncomeTarget / discountFactor;
+      row.costToBuyOneMonth = monthlyIncomeTarget / discountFactor;
+    }
+
     return {
       ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows, peakRow, totalFutureValue,
       finalYearSalary, finalYearContribution, finalYearRate, finalYearNetTakeHome,
@@ -471,7 +487,7 @@ const RetirementEngine = (function(){
 
   return Object.freeze({
     CONSTANTS: Object.freeze({
-      PHASE_START, PHASE_SPLIT, SWR_RATE, MONTHS_PER_YEAR,
+      PHASE_START, PHASE_SPLIT, SWR_RATE, MONTHS_PER_YEAR, DAYS_PER_YEAR,
       FEDERAL_STANDARD_DEDUCTION_2026_SINGLE, FEDERAL_BRACKETS_2026_SINGLE,
       FICA_SS_RATE, FICA_MEDICARE_RATE, FICA_ADDL_MEDICARE_RATE,
       FICA_SS_WAGE_BASE_2026, FICA_ADDL_MEDICARE_THRESHOLD_2026,

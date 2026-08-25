@@ -118,6 +118,7 @@ let chart = null;
 let chartPct = null;
 let taxTreatment = DEFAULT_TAX_TREATMENT; // TAX_TREATMENT_PRETAX | TAX_TREATMENT_ROTH | TAX_TREATMENT_TAXABLE
 let equalizeNetPay = DEFAULT_EQUALIZE_NET_PAY; // when true, Roth/Taxable contribution is solved to match Pre-tax net take-home
+let costUnit = 'day'; // 'day' | 'month' — which "cost of waiting" framing is currently displayed
 
 // =====================================================================
 // DOM -> ENGINE ADAPTER
@@ -225,6 +226,10 @@ function renderTopStats(data){
   }
 }
 
+function costFieldForUnit(row){
+  return costUnit === 'day' ? row.costToBuyOneDay : row.costToBuyOneMonth;
+}
+
 function renderTable(data){
   setHTML('year-table-body', data.yearRows.map(row => (
     '<tr>' +
@@ -237,6 +242,7 @@ function renderTable(data){
       '<td class="net">' + fmtMoney(row.netTakeHome) + '</td>' +
       '<td class="fv">' + fmtMoney(row.futureValue) + '</td>' +
       '<td class="pct">' + fmtPct(row.pctOfPot) + '</td>' +
+      '<td class="cost">' + fmtMoney(costFieldForUnit(row)) + '</td>' +
     '</tr>'
   )).join(''));
 
@@ -247,6 +253,55 @@ function renderTable(data){
     setText('peak-fv', '—');
     setText('peak-age', '—');
   }
+}
+
+// "The cost of waiting": pick a handful of reference years spread evenly
+// across the working years (not fixed ages, since those may fall outside
+// someone's actual career window) and show what it costs, contributed at
+// each of those years, to fund one day/month of final salary in retirement.
+function renderCostPanel(data){
+  const unitLabel = costUnit === 'day' ? 'day' : 'month';
+  setText('col-cost-header', 'Cost: 1 ' + unitLabel);
+  setText('cost-panel-sub',
+    'What it costs — contributed today, compounded to retirement — to fund exactly one ' + unitLabel +
+    ' of your final salary as retirement income, at a few different starting ages.');
+
+  const rows = data.yearRows;
+  if (!rows.length){
+    setHTML('cost-figures', '');
+    setText('cost-panel-callout', 'n/a');
+    return;
+  }
+
+  const n = rows.length;
+  const indices = Array.from(new Set([
+    0,
+    Math.floor(n / 3),
+    Math.floor((2 * n) / 3),
+    n - 1,
+  ])).sort((a, b) => a - b);
+
+  setHTML('cost-figures', indices.map(i => {
+    const row = rows[i];
+    return (
+      '<div class="cost-stat">' +
+        '<div class="stat-label">Age ' + row.age + '</div>' +
+        '<div class="stat-value">' + fmtMoney(costFieldForUnit(row)) + '</div>' +
+      '</div>'
+    );
+  }).join(''));
+
+  const first = rows[0];
+  const last = rows[n - 1];
+  const firstCost = costFieldForUnit(first);
+  const lastCost = costFieldForUnit(last);
+  const multiple = firstCost > 0 ? lastCost / firstCost : null;
+
+  setHTML('cost-panel-callout',
+    'At age ' + first.age + ', buying one ' + unitLabel + ' of your final salary in retirement income costs ' +
+    '<strong>' + fmtMoney(firstCost) + '</strong>. Wait until ' + last.age + ', and the same ' + unitLabel + ' costs ' +
+    '<strong>' + fmtMoney(lastCost) + '</strong>' +
+    (multiple !== null ? ' — ' + multiple.toFixed(1) + 'x as much.' : '.'));
 }
 
 function renderBalanceChart(data){
@@ -381,6 +436,7 @@ function render(){
   const data = project();
   renderTopStats(data);
   renderTable(data);
+  renderCostPanel(data);
   renderBalanceChart(data);
   renderPctChart(data);
 }
@@ -455,6 +511,18 @@ const selectEqualizeNetPay = createSegmentedToggle(
   }
 );
 
+// --- "Cost of waiting" unit toggle: per day / per month ---
+const selectCostUnit = createSegmentedToggle(
+  [
+    { value: 'day', el: document.getElementById('toggle-cost-day') },
+    { value: 'month', el: document.getElementById('toggle-cost-month') },
+  ],
+  (value) => {
+    costUnit = value;
+    render();
+  }
+);
+
 // =====================================================================
 // RESET
 // =====================================================================
@@ -465,6 +533,7 @@ document.getElementById('reset-btn').addEventListener('click', () => {
   });
   selectTaxTreatment(DEFAULT_TAX_TREATMENT);
   selectEqualizeNetPay(DEFAULT_EQUALIZE_NET_PAY);
+  selectCostUnit('day');
 });
 
 // =====================================================================
