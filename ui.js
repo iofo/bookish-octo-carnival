@@ -544,6 +544,7 @@ function initResizableColumns(){
     if (!cols[i]) return;
     const handle = document.createElement('div');
     handle.className = 'col-resize-handle';
+    handle.title = 'Drag to resize this column';
     th.appendChild(handle);
 
     handle.addEventListener('mousedown', (event) => {
