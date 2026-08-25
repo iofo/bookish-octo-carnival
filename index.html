@@ -189,6 +189,11 @@
   .stats-row-3{ grid-template-columns:repeat(3,1fr); }
   .stats-row-2{ grid-template-columns:repeat(2,1fr); }
   @media (max-width:600px){ .stats-row-2{ grid-template-columns:1fr; } }
+  .monthly-takehome-caption{
+    font-size:0.78rem;
+    color:var(--paper-dim);
+    margin:-10px 0 12px;
+  }
   @media (max-width:900px){ .stats-row{ grid-template-columns:repeat(2,1fr); } }
   @media (max-width:600px){ .stats-row{ grid-template-columns:1fr; } }
   .stat .stat-foot{
@@ -684,6 +689,22 @@
         <div class="stat-label">Final gross salary, in today's terms</div>
         <div class="stat-value" id="stat-final-salary-real">—</div>
         <div class="stat-foot" id="stat-final-salary-nominal-foot">—</div>
+      </div>
+    </div>
+
+    <div class="monthly-takehome-caption">Monthly take-home, after federal tax, FICA, and your savings rate — in today's dollars. Updates with the contribution-type toggle below.</div>
+    <div class="stats-row stats-row-3">
+      <div class="stat">
+        <div class="stat-label">Starting monthly take-home</div>
+        <div class="stat-value" id="stat-start-monthly-takehome">—</div>
+      </div>
+      <div class="stat teal">
+        <div class="stat-label">Final monthly take-home, in today's terms</div>
+        <div class="stat-value" id="stat-final-monthly-takehome">—</div>
+      </div>
+      <div class="stat gold">
+        <div class="stat-label">Retirement monthly take-home, in today's terms</div>
+        <div class="stat-value" id="stat-retirement-monthly-takehome">—</div>
       </div>
     </div>
 

@@ -16,7 +16,7 @@
 
 // Convenience aliases into the engine's public constants, so this file
 // doesn't need "RetirementEngine.CONSTANTS." on every line.
-const { TAX_TREATMENT_PRETAX, TAX_TREATMENT_ROTH, TAX_TREATMENT_TAXABLE } = RetirementEngine.CONSTANTS;
+const { TAX_TREATMENT_PRETAX, TAX_TREATMENT_ROTH, TAX_TREATMENT_TAXABLE, MONTHS_PER_YEAR } = RetirementEngine.CONSTANTS;
 
 // Colors read once from the CSS custom properties in :root, so Chart.js
 // (which needs literal color strings, not CSS vars) never duplicates a
@@ -194,11 +194,25 @@ function renderTopStats(data){
   const realFinalSalary = data.finalYearSalary / Math.pow(1 + inflationRate, yearsElapsedFinalSalary);
   const realSwrIncome = data.swrIncomeNet / Math.pow(1 + inflationRate, yearsToRetirement);
   const realSwrTax = data.swrTax / Math.pow(1 + inflationRate, yearsToRetirement);
+  const realFinalTakeHome = data.finalYearNetTakeHome / Math.pow(1 + inflationRate, yearsElapsedFinalSalary);
   const taxLabel = swrTaxTreatmentLabel();
 
   setText('stat-start-salary', fmtMoney(parseFloat(els.salary.value) || 0));
   setText('stat-final-salary-real', fmtMoney(realFinalSalary));
   setText('stat-final-salary-nominal-foot', 'Nominal at age ' + finalSalaryAge + ': ' + fmtMoney(data.finalYearSalary));
+
+  // Monthly take-home: what actually lands in your pocket each month, after
+  // federal tax, FICA, and that year's savings contribution — the same
+  // netTakeHome figures already used in the year-by-year table, just divided
+  // into a monthly figure and (for the final/retirement columns) deflated to
+  // today's dollars for a fair side-by-side comparison with the starting figure.
+  const startingMonthlyTakeHome = data.yearRows.length ? data.yearRows[0].netTakeHome / MONTHS_PER_YEAR : 0;
+  const finalMonthlyTakeHome = realFinalTakeHome / MONTHS_PER_YEAR;
+  const retirementMonthlyTakeHome = realSwrIncome / MONTHS_PER_YEAR;
+  setText('stat-start-monthly-takehome', fmtMoney(startingMonthlyTakeHome));
+  setText('stat-final-monthly-takehome', fmtMoney(finalMonthlyTakeHome));
+  setText('stat-retirement-monthly-takehome', fmtMoney(retirementMonthlyTakeHome));
+
   setText('stat-swr-real', fmtMoney(realSwrIncome) + '/yr');
   setText('stat-swr-real-foot', 'Net nominal at age ' + retireAgeVal + ': ' + fmtMoney(data.swrIncomeNet) + '/yr');
   setText('stat-swr-real-tax-note', taxLabel
