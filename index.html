@@ -294,6 +294,13 @@
     font-size:0.78rem;
     border-top:1px solid var(--line);
   }
+  .version-info{
+    margin-top:10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    letter-spacing:0.03em;
+    opacity:0.7;
+  }
 
   .peak-panel{
     background:var(--panel);
@@ -845,7 +852,16 @@
 
 <footer>
   Estimates only — assumes constant annual rates and ignores fees. Federal tax is a simplified single-filer estimate; see the note above the table for details. Not financial advice.
+  <p class="version-info">Build: <span id="build-info">local / unbuilt</span></p>
 </footer>
+
+<!--
+  Optional visitor counter, powered by GoatCounter (free, privacy-friendly,
+  no cookies, no account needed to view — https://www.goatcounter.com).
+  To enable: sign up for a free GoatCounter site, then replace MYCODE below
+  with your site code and uncomment this script tag.
+<script data-goatcounter="https://MYCODE.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+-->
 
 <script src="engine.js"></script>
 <script src="ui.js"></script>
