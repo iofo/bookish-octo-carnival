@@ -372,6 +372,31 @@ test('the final working year costs meaningfully more than the first (illustrates
   assert.ok(last.costToBuyOneDay > first.costToBuyOneDay * 10, 'expected at least a 10x gap between first and last working year');
 });
 
+test('the first row\'s real (today\'s-dollars) cost equals its nominal cost (zero years of inflation to strip out)', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const first = result.yearRows[0];
+  assertApprox(first.costToBuyOneDayReal, first.costToBuyOneDay, 1e-6);
+});
+
+test('later rows\' real cost is strictly less than their nominal cost (inflation has been stripped out)', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const last = result.yearRows[result.yearRows.length - 1];
+  assert.ok(last.costToBuyOneDayReal < last.costToBuyOneDay);
+});
+
+test('real (today\'s-dollars) cost still rises with age, but by less than the nominal comparison suggests', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const first = result.yearRows[0];
+  const last = result.yearRows[result.yearRows.length - 1];
+  const nominalMultiple = last.costToBuyOneDay / first.costToBuyOneDay;
+  const realMultiple = last.costToBuyOneDayReal / first.costToBuyOneDayReal;
+  assert.ok(realMultiple > 1, 'time-in-market effect should still show up in real terms');
+  assert.ok(realMultiple < nominalMultiple, 'real multiple should be smaller than the inflation-inflated nominal multiple');
+  // Known reference figures at the default scenario: ~8.1x real vs ~24.3x nominal.
+  assertApprox(realMultiple, 8.1, 0.2);
+  assertApprox(nominalMultiple, 24.3, 0.5);
+});
+
 section('runProjection — configurable SWR rate');
 
 test('SWR gross income scales exactly with swrRate (same balance, different withdrawal %)', () => {

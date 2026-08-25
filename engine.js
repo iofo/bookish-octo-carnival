@@ -472,6 +472,19 @@ const RetirementEngine = (function(){
       const discountFactor = Math.pow(1 + returnRate, yearsToRetirementForRow);
       row.costToBuyOneDay = dailyIncomeTarget / discountFactor;
       row.costToBuyOneMonth = monthlyIncomeTarget / discountFactor;
+
+      // The nominal figures above are honest about what you'd actually pay in
+      // that year's dollars, but they're NOT comparable to each other at a
+      // glance: the age-22 figure is (coincidentally) already in today's
+      // purchasing power, since it's discounted the full horizon, while the
+      // age-59 figure is expressed in age-59 dollars, which have absorbed
+      // decades of inflation. Deflate every row back to today's purchasing
+      // power (same technique as "Final salary, in today's terms" elsewhere)
+      // so the across-age comparison is actually apples-to-apples.
+      const yearsFromNowForRow = row.age - age;
+      const inflationFactorForRow = Math.pow(1 + inflation, yearsFromNowForRow);
+      row.costToBuyOneDayReal = row.costToBuyOneDay / inflationFactorForRow;
+      row.costToBuyOneMonthReal = row.costToBuyOneMonth / inflationFactorForRow;
     }
 
     return {

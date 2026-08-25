@@ -230,6 +230,17 @@ function costFieldForUnit(row){
   return costUnit === 'day' ? row.costToBuyOneDay : row.costToBuyOneMonth;
 }
 
+// The headline panel uses REAL (today's-purchasing-power) figures rather than
+// nominal ones. Nominal figures are individually honest (what you'd actually
+// pay in that year's dollars) but not comparable to each other at a glance —
+// the age-22 figure happens to already be in today's dollars (discounted the
+// full horizon), while a near-retirement figure is expressed in dollars that
+// have already absorbed decades of inflation. Deflating every row to today's
+// terms is what makes the across-age comparison honest.
+function costRealFieldForUnit(row){
+  return costUnit === 'day' ? row.costToBuyOneDayReal : row.costToBuyOneMonthReal;
+}
+
 function renderTable(data){
   setHTML('year-table-body', data.yearRows.map(row => (
     '<tr>' +
@@ -259,12 +270,16 @@ function renderTable(data){
 // across the working years (not fixed ages, since those may fall outside
 // someone's actual career window) and show what it costs, contributed at
 // each of those years, to fund one day/month of final salary in retirement.
+// Shown in today's dollars (see costRealFieldForUnit above) — the table's
+// "Cost: 1 day/month" column stays nominal, matching every other column in
+// that table, but is explicitly labeled as such so the two don't look like
+// they disagree.
 function renderCostPanel(data){
   const unitLabel = costUnit === 'day' ? 'day' : 'month';
-  setText('col-cost-header', 'Cost: 1 ' + unitLabel);
+  setText('col-cost-header', 'Cost: 1 ' + unitLabel + ' (nominal)');
   setText('cost-panel-sub',
-    'What it costs — contributed today, compounded to retirement — to fund exactly one ' + unitLabel +
-    ' of your final salary as retirement income, at a few different starting ages.');
+    'What it costs, in today\'s dollars, to fund exactly one ' + unitLabel +
+    ' of your final salary as retirement income — contributed at a few different starting ages, then compounded to retirement.');
 
   const rows = data.yearRows;
   if (!rows.length){
@@ -286,22 +301,22 @@ function renderCostPanel(data){
     return (
       '<div class="cost-stat">' +
         '<div class="stat-label">Age ' + row.age + '</div>' +
-        '<div class="stat-value">' + fmtMoney(costFieldForUnit(row)) + '</div>' +
+        '<div class="stat-value">' + fmtMoney(costRealFieldForUnit(row)) + '</div>' +
       '</div>'
     );
   }).join(''));
 
   const first = rows[0];
   const last = rows[n - 1];
-  const firstCost = costFieldForUnit(first);
-  const lastCost = costFieldForUnit(last);
+  const firstCost = costRealFieldForUnit(first);
+  const lastCost = costRealFieldForUnit(last);
   const multiple = firstCost > 0 ? lastCost / firstCost : null;
 
   setHTML('cost-panel-callout',
     'At age ' + first.age + ', buying one ' + unitLabel + ' of your final salary in retirement income costs ' +
-    '<strong>' + fmtMoney(firstCost) + '</strong>. Wait until ' + last.age + ', and the same ' + unitLabel + ' costs ' +
+    '<strong>' + fmtMoney(firstCost) + '</strong> in today\'s dollars. Wait until ' + last.age + ', and the same ' + unitLabel + ' costs ' +
     '<strong>' + fmtMoney(lastCost) + '</strong>' +
-    (multiple !== null ? ' — ' + multiple.toFixed(1) + 'x as much.' : '.'));
+    (multiple !== null ? ' — ' + multiple.toFixed(1) + 'x as much, even after adjusting for inflation.' : ' in today\'s dollars.'));
 }
 
 function renderBalanceChart(data){
