@@ -75,6 +75,7 @@ const DEFAULT_INPUTS = Object.freeze({
   lateGrowthSpread: 0,
   capitalGainSpread: 0.04,
   dividendYield: 0.02,
+  swrRate: 0.04,
   taxTreatment: CONSTANTS.TAX_TREATMENT_PRETAX,
   equalizeNetPay: false,
 });
@@ -337,6 +338,30 @@ test('the 401(k) catch-up correctly raises the cap at exactly age 50', () => {
   const at50 = result.yearRows.find(r => r.age === 50);
   assertApprox(at49.contribution, 24500, 1);
   assertApprox(at50.contribution, 32500, 1);
+});
+
+section('runProjection — configurable SWR rate');
+
+test('SWR gross income scales exactly with swrRate (same balance, different withdrawal %)', () => {
+  const at4pct = engine.runProjection(withInputs({ swrRate: 0.04 }));
+  const at6pct = engine.runProjection(withInputs({ swrRate: 0.06 }));
+  // Same accumulation inputs, so final balance should be identical...
+  assertApprox(at4pct.final, at6pct.final, 1);
+  // ...but gross SWR income should scale exactly with the rate (6% / 4% = 1.5x).
+  assertApprox(at6pct.swrIncomeGross, at4pct.swrIncomeGross * 1.5, 1);
+});
+
+test('omitting swrRate falls back to the documented 4% default', () => {
+  const inputsWithoutSwrRate = Object.assign({}, DEFAULT_INPUTS);
+  delete inputsWithoutSwrRate.swrRate;
+  const result = engine.runProjection(inputsWithoutSwrRate);
+  assertApprox(result.swrRate, CONSTANTS.SWR_RATE, 1e-9);
+  assertApprox(result.swrIncomeGross, result.final * CONSTANTS.SWR_RATE, 1);
+});
+
+test('the actual swrRate used is echoed back on the result object', () => {
+  const result = engine.runProjection(withInputs({ swrRate: 0.055 }));
+  assertApprox(result.swrRate, 0.055, 1e-9);
 });
 
 section('runProjection — structural invariants');

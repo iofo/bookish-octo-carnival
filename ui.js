@@ -16,7 +16,7 @@
 
 // Convenience aliases into the engine's public constants, so this file
 // doesn't need "RetirementEngine.CONSTANTS." on every line.
-const { TAX_TREATMENT_PRETAX, TAX_TREATMENT_ROTH, TAX_TREATMENT_TAXABLE, SWR_RATE } = RetirementEngine.CONSTANTS;
+const { TAX_TREATMENT_PRETAX, TAX_TREATMENT_ROTH, TAX_TREATMENT_TAXABLE } = RetirementEngine.CONSTANTS;
 
 // Colors read once from the CSS custom properties in :root, so Chart.js
 // (which needs literal color strings, not CSS vars) never duplicates a
@@ -76,6 +76,7 @@ const els = {
   lateGrowth: document.getElementById('lateGrowth'),
   capitalGainRate: document.getElementById('capitalGainRate'),
   dividendYield: document.getElementById('dividendYield'),
+  swrRate: document.getElementById('swrRate'),
 };
 const valEls = {
   age: document.getElementById('val-age'),
@@ -89,6 +90,7 @@ const valEls = {
   lateGrowth: document.getElementById('val-lateGrowth'),
   capitalGainRate: document.getElementById('val-capitalGainRate'),
   dividendYield: document.getElementById('val-dividendYield'),
+  swrRate: document.getElementById('val-swrRate'),
 };
 
 // The HTML's own `value="..."` attributes are the single source of truth
@@ -143,6 +145,7 @@ function project(){
     lateGrowthSpread: parseFloat(els.lateGrowth.value) / 100,
     capitalGainSpread: parseFloat(els.capitalGainRate.value) / 100,
     dividendYield: parseFloat(els.dividendYield.value) / 100,
+    swrRate: parseFloat(els.swrRate.value) / 100,
     taxTreatment,
     equalizeNetPay,
   });
@@ -164,6 +167,7 @@ function renderSliderLabels(){
   valEls.lateGrowth.textContent = els.lateGrowth.value + '%';
   valEls.capitalGainRate.textContent = els.capitalGainRate.value + '%';
   valEls.dividendYield.textContent = els.dividendYield.value + '%';
+  valEls.swrRate.textContent = els.swrRate.value + '%';
 }
 
 // Single source of truth for how each contribution type is described at
@@ -181,6 +185,8 @@ function renderTopStats(data){
   const retireAgeVal = parseInt(els.retireAge.value);
   const yearsToRetirement = Math.max(retireAgeVal - currentAge, 0);
   const finalSalaryAge = retireAgeVal - 1;
+  setText('swr-panel-rate-label', fmtPct(data.swrRate * 100));
+  setText('swr-panel-rate-label-2', fmtPct(data.swrRate * 100));
   const yearsElapsedFinalSalary = Math.max(finalSalaryAge - currentAge, 0);
 
   const realFinalSalary = data.finalYearSalary / Math.pow(1 + inflationRate, yearsElapsedFinalSalary);
@@ -210,7 +216,7 @@ function renderTopStats(data){
       'Final salary: ' + fmtMoney(data.finalYearSalary) + '<br>' +
       'Savings rate: ' + fmtPct(data.finalYearRate * 100) + ' (' + fmtMoney(data.finalYearContribution) + ')<br>' +
       'Net take-home (final year): ' + fmtMoney(data.finalYearNetTakeHome) + '<br>' +
-      SWR_RATE * 100 + '% SWR gross income: ' + fmtMoney(data.swrIncomeGross) + '/yr<br>' +
+      fmtPct(data.swrRate * 100) + ' SWR gross income: ' + fmtMoney(data.swrIncomeGross) + '/yr<br>' +
       swrTaxLine + '<br>' +
       'Net SWR income: ' + fmtMoney(data.swrIncomeNet) + '/yr');
   } else {

@@ -157,6 +157,23 @@
     background:var(--panel-2);
   }
 
+  .advanced-panel{ margin-top:4px; }
+  .advanced-summary{
+    cursor:pointer;
+    user-select:none;
+    list-style:none;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:0;
+    padding:2px 0;
+    transition:color 0.2s ease;
+  }
+  .advanced-summary::-webkit-details-marker{ display:none; }
+  .advanced-summary:hover{ color:var(--gold); }
+  .advanced-panel[open] .advanced-summary{ margin-bottom:20px; }
+  .advanced-panel .field:last-of-type{ margin-bottom:14px; }
+
   /* ---------- MAIN ---------- */
   main{ padding:40px; }
   @media (max-width:600px){ main{ padding:24px; } }
@@ -477,14 +494,6 @@
     </div>
 
     <hr class="divider">
-    <div class="section-label">Inflation</div>
-
-    <div class="field">
-      <label>Inflation rate <span class="val" id="val-inflation">3%</span></label>
-      <input type="range" id="inflation" min="0" max="8" value="3" step="0.25">
-    </div>
-
-    <hr class="divider">
     <div class="section-label">Early career (22–35)</div>
     <p class="section-help-text">
       Savings rate rises each year starting at 22. From 35 on, it switches to the late-career increment below, up to the cap.
@@ -543,6 +552,24 @@
     </p>
 
     <hr class="divider">
+    <details class="advanced-panel">
+      <summary class="section-label advanced-summary">Advanced ▾</summary>
+
+      <div class="field">
+        <label>Inflation rate <span class="val" id="val-inflation">3%</span></label>
+        <input type="range" id="inflation" min="0" max="8" value="3" step="0.25">
+      </div>
+
+      <div class="field">
+        <label>Safe withdrawal rate (SWR) <span class="val" id="val-swrRate">4%</span></label>
+        <input type="range" id="swrRate" min="2" max="8" value="4" step="0.25">
+      </div>
+      <p class="section-help-text">
+        The percentage of your final balance withdrawn each year in retirement — this drives every "retirement income" figure on the page. 4% is the traditional rule-of-thumb default; lower is more conservative, higher assumes a shorter or more aggressive drawdown.
+      </p>
+    </details>
+
+    <hr class="divider">
     <button type="button" class="btn-reset" id="reset-btn">Reset to defaults</button>
   </div>
 
@@ -591,8 +618,8 @@
 
     <div class="swr-panel">
       <div class="swr-panel-header">
-        <div class="chart-title">Retirement income at 4% SWR</div>
-        <div class="chart-sub">What your savings could pay you each year in retirement, applying a 4% safe withdrawal rate to your final balance. Figures below are net of estimated withdrawal tax, not gross.</div>
+        <div class="chart-title">Retirement income at <span id="swr-panel-rate-label">4%</span> SWR</div>
+        <div class="chart-sub">What your savings could pay you each year in retirement, applying a <span id="swr-panel-rate-label-2">4%</span> safe withdrawal rate to your final balance. Figures below are net of estimated withdrawal tax, not gross.</div>
       </div>
       <div class="swr-figures">
         <div class="stat gold">

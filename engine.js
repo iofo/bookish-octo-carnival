@@ -251,6 +251,7 @@ const RetirementEngine = (function(){
    * @param {number} inputs.lateGrowthSpread     Salary growth over inflation, late career (decimal).
    * @param {number} inputs.capitalGainSpread    Capital gain over inflation (decimal).
    * @param {number} inputs.dividendYield        Qualified dividend yield, additive to total return (decimal).
+   * @param {number} inputs.swrRate              Safe withdrawal rate applied to the final balance (decimal, e.g. 0.04).
    * @param {string} inputs.taxTreatment         TAX_TREATMENT_PRETAX | TAX_TREATMENT_ROTH | TAX_TREATMENT_TAXABLE.
    * @param {boolean} inputs.equalizeNetPay      If true, Roth/Taxable contribution is solved to match Pre-tax net take-home.
    *
@@ -266,6 +267,9 @@ const RetirementEngine = (function(){
       capitalGainSpread, dividendYield,
       taxTreatment, equalizeNetPay,
     } = inputs;
+    // Defaults to the standard 4% rule if the caller doesn't specify one,
+    // so existing callers/tests that predate this parameter still work.
+    const swrRate = inputs.swrRate != null ? inputs.swrRate : SWR_RATE;
 
     const age = inputs.age;
     const retireAge = inputs.retireAge > age ? inputs.retireAge : age + 1;
@@ -412,7 +416,7 @@ const RetirementEngine = (function(){
     }
 
     // Safe withdrawal rate applied to the final balance.
-    const swrIncomeGross = balance * SWR_RATE;
+    const swrIncomeGross = balance * swrRate;
     const yearsToRetirementTotal = retireAge - age;
 
     // Pre-tax (Traditional) balances are withdrawn as ordinary taxable income in retirement,
@@ -457,7 +461,7 @@ const RetirementEngine = (function(){
     return {
       ages, balances, cumContrib, cumGrowth, totalContrib, totalGrowth, final: balance, yearRows, peakRow, totalFutureValue,
       finalYearSalary, finalYearContribution, finalYearRate, finalYearNetTakeHome,
-      swrIncomeGross, swrTax, swrTaxableGainPortion, swrIncomeNet, swrPctOfFinalSalary
+      swrRate, swrIncomeGross, swrTax, swrTaxableGainPortion, swrIncomeNet, swrPctOfFinalSalary
     };
   }
 
