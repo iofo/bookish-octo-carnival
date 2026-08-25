@@ -518,6 +518,51 @@ function render(){
 }
 
 // =====================================================================
+// RESIZABLE TABLE COLUMNS
+// Default widths are set in index.html's <colgroup> (sized in `ch` units —
+// exact character counts, since the table is monospace). This just wires
+// up drag handles so a person can override those defaults by hand. Column
+// headers are static (only the tbody re-renders on input), so this only
+// needs to run once at startup, not on every render().
+// =====================================================================
+
+function initResizableColumns(){
+  const table = document.getElementById('year-table');
+  const cols = table.querySelectorAll('colgroup col');
+  const headers = table.querySelectorAll('thead th');
+  const MIN_COLUMN_WIDTH_PX = 32;
+
+  headers.forEach((th, i) => {
+    if (!cols[i]) return;
+    const handle = document.createElement('div');
+    handle.className = 'col-resize-handle';
+    th.appendChild(handle);
+
+    handle.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      const startX = event.pageX;
+      const startWidth = cols[i].getBoundingClientRect().width;
+      handle.classList.add('resizing');
+      document.body.classList.add('col-resizing');
+
+      function onMouseMove(moveEvent){
+        const delta = moveEvent.pageX - startX;
+        const newWidth = Math.max(MIN_COLUMN_WIDTH_PX, startWidth + delta);
+        cols[i].style.width = newWidth + 'px';
+      }
+      function onMouseUp(){
+        handle.classList.remove('resizing');
+        document.body.classList.remove('col-resizing');
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      }
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  });
+}
+
+// =====================================================================
 // SEGMENTED TOGGLE CONTROL
 // Shared wiring for every "pick one of N buttons" control on the page
 // (chart tabs, tax treatment, equalize net pay) instead of three
@@ -626,4 +671,5 @@ document.getElementById('reset-btn').addEventListener('click', () => {
 // =====================================================================
 
 Object.values(els).forEach(el => el.addEventListener('input', render));
+initResizableColumns();
 render();
