@@ -7,6 +7,16 @@ name: Deploy to GitHub Pages
 # drift out of sync with what's in the repo. If the footer's short SHA
 # matches `git log --oneline -1` locally, Pages is caught up; if it
 # doesn't, a deploy is still in flight or something's stuck.
+#
+# Action versions below are pinned to their current Node.js 24-compatible
+# majors (checked against GitHub's own docs as of August 2026). GitHub is
+# retiring the Node 20 Actions runtime — Node 24 became the default runner
+# behavior on June 2, 2026, and Node 20 support is fully removed on
+# September 16, 2026 — so older major versions of these actions will start
+# throwing deprecation warnings, and eventually stop working outright.
+# If warnings return later, it means a newer major version has shipped;
+# bump the version tags below to match GitHub's current Pages workflow
+# example (docs.github.com/en/pages, "Using custom workflows").
 
 on:
   push:
@@ -29,7 +39,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
       - name: Stamp build info into the page footer
         run: |
@@ -38,7 +51,7 @@ jobs:
           sed -i "s|id=\"build-info\">local / unbuilt<|id=\"build-info\">${SHORT_SHA} · deployed ${BUILD_DATE}<|" index.html
 
       - name: Upload site as a Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: '.'
 
