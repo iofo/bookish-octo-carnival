@@ -396,10 +396,16 @@ const RetirementEngine = (function(){
       const contributionFutureValue = contribution * Math.pow(1 + returnRate, yearsToRetirement);
 
       const netTakeHome = salary - federalTax - fica - contribution;
+      // Deflated to today's purchasing power, same technique used throughout
+      // this app ("Final salary, in today's terms", the cost-of-waiting panel,
+      // etc.) — lets the salary chart show real earnings growth, separate
+      // from the sticker-price effect of inflation alone.
+      const salaryReal = salary / Math.pow(1 + inflation, yearsFromNow);
 
       yearRows.push({
         age: ageThisYear,
         salary: salary,
+        salaryReal: salaryReal,
         rate: actualRate,
         contribution: contribution,
         futureValue: contributionFutureValue,

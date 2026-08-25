@@ -116,6 +116,7 @@ const fmtPct = (n, decimals = 1) => n.toFixed(decimals) + '%';
 
 let chart = null;
 let chartPct = null;
+let chartSalary = null;
 let taxTreatment = DEFAULT_TAX_TREATMENT; // TAX_TREATMENT_PRETAX | TAX_TREATMENT_ROTH | TAX_TREATMENT_TAXABLE
 let equalizeNetPay = DEFAULT_EQUALIZE_NET_PAY; // when true, Roth/Taxable contribution is solved to match Pre-tax net take-home
 let costUnit = 'day'; // 'day' | 'month' — which "cost of waiting" framing is currently displayed
@@ -447,6 +448,64 @@ function renderPctChart(data){
   });
 }
 
+function renderSalaryChart(data){
+  const salaryAges = data.yearRows.map(r => r.age);
+  const salaryValues = data.yearRows.map(r => r.salaryReal);
+
+  if (chartSalary){
+    chartSalary.data.labels = salaryAges;
+    chartSalary.data.datasets[0].data = salaryValues;
+    chartSalary.update();
+    return;
+  }
+
+  const ctxSalary = document.getElementById('chart-salary').getContext('2d');
+  chartSalary = new Chart(ctxSalary, {
+    type: 'line',
+    data: {
+      labels: salaryAges,
+      datasets: [
+        {
+          label: 'Salary (today\'s $)',
+          data: salaryValues,
+          borderColor: THEME.teal,
+          backgroundColor: THEME.tealFill,
+          fill: true,
+          tension: 0.25,
+          pointRadius: 0,
+          borderWidth: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          title: { display: true, text: 'Age', ...CHART_AXIS_TITLE_STYLE },
+          ticks: CHART_AXIS_TICK_STYLE,
+          grid: CHART_GRID_STYLE
+        },
+        y: {
+          ticks: { ...CHART_AXIS_TICK_STYLE, callback: (v) => '$' + (v / 1000).toFixed(0) + 'k' },
+          grid: CHART_GRID_STYLE
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...CHART_TOOLTIP_STYLE,
+          callbacks: {
+            title: (items) => 'Age ' + items[0].label,
+            label: (item) => 'Salary (today\'s $): ' + fmtMoney(item.parsed.y)
+          }
+        }
+      }
+    }
+  });
+}
+
 function render(){
   renderSliderLabels();
   const data = project();
@@ -455,6 +514,7 @@ function render(){
   renderCostPanel(data);
   renderBalanceChart(data);
   renderPctChart(data);
+  renderSalaryChart(data);
 }
 
 // =====================================================================
@@ -480,19 +540,28 @@ function createSegmentedToggle(buttonConfigs, onSelect){
 }
 
 // --- Chart tabs ---
-const paneBalance = document.getElementById('pane-balance');
-const panePct = document.getElementById('pane-pct');
+const chartPanes = {
+  balance: document.getElementById('pane-balance'),
+  pct: document.getElementById('pane-pct'),
+  salary: document.getElementById('pane-salary'),
+};
+const chartInstances = {
+  balance: () => chart,
+  pct: () => chartPct,
+  salary: () => chartSalary,
+};
 const selectChartTab = createSegmentedToggle(
   [
     { value: 'balance', el: document.getElementById('tab-balance') },
     { value: 'pct', el: document.getElementById('tab-pct') },
+    { value: 'salary', el: document.getElementById('tab-salary') },
   ],
   (value) => {
-    const isBalance = value === 'balance';
-    paneBalance.style.display = isBalance ? '' : 'none';
-    panePct.style.display = isBalance ? 'none' : '';
-    if (isBalance && chart) chart.resize();
-    if (!isBalance && chartPct) chartPct.resize();
+    Object.keys(chartPanes).forEach((key) => {
+      chartPanes[key].style.display = key === value ? '' : 'none';
+    });
+    const activeChart = chartInstances[value]();
+    if (activeChart) activeChart.resize();
   }
 );
 

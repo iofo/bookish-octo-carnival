@@ -705,6 +705,7 @@
       <div class="chart-tabs" role="tablist">
         <button class="chart-tab active" id="tab-balance" data-target="balance" role="tab" aria-selected="true">Balance over time</button>
         <button class="chart-tab" id="tab-pct" data-target="pct" role="tab" aria-selected="false">% of pot by age</button>
+        <button class="chart-tab" id="tab-salary" data-target="salary" role="tab" aria-selected="false">Salary over time</button>
       </div>
 
       <div class="chart-pane" id="pane-balance">
@@ -722,6 +723,13 @@
         <div class="chart-sub">Each year's contribution future value as a percent of the total retirement pot built from contributions — shows which years matter most.</div>
         <div class="chart-canvas-holder">
           <canvas id="chart-pct"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-pane" id="pane-salary" style="display:none;">
+        <div class="chart-sub">Your projected salary at each age, deflated back to today's purchasing power — shows how much your real earnings actually grow, separate from the sticker-price effect of inflation.</div>
+        <div class="chart-canvas-holder">
+          <canvas id="chart-salary"></canvas>
         </div>
       </div>
     </div>

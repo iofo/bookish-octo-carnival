@@ -421,6 +421,28 @@ test('the actual swrRate used is echoed back on the result object', () => {
   assertApprox(result.swrRate, 0.055, 1e-9);
 });
 
+section('runProjection — salary in today\'s dollars (salaryReal)');
+
+test('first row\'s real salary equals nominal (zero years of inflation elapsed)', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const first = result.yearRows[0];
+  assertApprox(first.salaryReal, first.salary, 1e-6);
+});
+
+test('later rows\' real salary is strictly less than nominal (inflation stripped out)', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const last = result.yearRows[result.yearRows.length - 1];
+  assert.ok(last.salaryReal < last.salary);
+});
+
+test('real salary matches direct deflation of nominal salary by elapsed inflation', () => {
+  const result = engine.runProjection(DEFAULT_INPUTS);
+  const row = result.yearRows.find(r => r.age === 40);
+  const yearsElapsed = 40 - DEFAULT_INPUTS.age;
+  const expected = row.salary / Math.pow(1 + DEFAULT_INPUTS.inflationRate, yearsElapsed);
+  assertApprox(row.salaryReal, expected, 0.01);
+});
+
 section('runProjection — structural invariants');
 
 test('% of pot column always sums to 100% across all years', () => {
