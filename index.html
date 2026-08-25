@@ -661,6 +661,7 @@
         FICA (est.) is 2026 Social Security (6.2% up to the $184,500 wage base) plus Medicare (1.45–2.35%), applied to gross wages regardless of the contribution-type toggle. Both Federal tax and FICA are subtracted to get net take-home; FICA never affects any other figure on the page.
         Equalize net pay (Roth/Taxable only): reduces the contribution amount so that year's net take-home matches what Pre-tax would give at the same savings-rate schedule. The Savings % and Savings amount columns reflect this adjusted, smaller contribution — which is why Roth/Taxable balances often end up lower than Traditional ones for the "same" paycheck impact.
         Taxable (Brokerage) withdrawal tax: assumes a buy-and-hold account where gains are only realized at withdrawal, taxed as 2026 long-term capital gains (0%/15%/20% brackets, inflation-adjusted) plus the 3.8% Net Investment Income Tax above $200,000 MAGI (a fixed threshold — by law it has never been inflation-indexed). Each year's withdrawal is assumed to carry gain in the same proportion as the account's overall gain-to-balance ratio; your original contributions come back tax-free as return of basis.
+        401(k) contribution limit: Pre-tax and Roth are capped at the 2026 IRS employee deferral limit ($24,500, plus $8,000 more from age 50+), both inflation-adjusted — if your savings-rate schedule calls for more than that in a given year, the excess simply isn't contributed. Taxable (Brokerage) has no such legal limit and always follows the full schedule.
       </div>
       <div class="table-scroll">
         <table id="year-table">
@@ -744,6 +745,17 @@
   // scaled by inflation here, on purpose.
   const NIIT_RATE = 0.038;
   const NIIT_THRESHOLD_SINGLE = 200000;
+
+  // 2026 employee elective deferral limit for 401(k)/403(b) plans (IRC §402(g),
+  // per IRS Notice 2025-67), plus the standard age-50+ catch-up. Both are
+  // inflation-adjusted in real life and are here too. This model doesn't
+  // implement the separate SECURE 2.0 "super catch-up" for ages 60-63 — just
+  // the standard two-tier limit. Applies only to Pre-tax and Roth (both are
+  // 401(k)-style employee deferrals); a Taxable brokerage account has no such
+  // legal cap.
+  const EMPLOYEE_401K_LIMIT_2026 = 24500;
+  const CATCHUP_401K_LIMIT_2026 = 8000;
+  const CATCHUP_401K_AGE = 50;
 
   // Tax treatment options for the contribution-type toggle.
   const TAX_TREATMENT_PRETAX = 'pretax';
@@ -859,6 +871,15 @@
 
   function salaryGrowthForAge(age, earlyGrowth, lateGrowth){
     return age < PHASE_SPLIT ? earlyGrowth : lateGrowth;
+  }
+
+  // Employee 401(k)/403(b) elective deferral limit for a given age and year,
+  // inflation-adjusted. Only meaningful for Pre-tax and Roth contributions.
+  function employee401kLimitForAge(age, yearsFromNow, inflationRate){
+    const inflationFactor = Math.pow(1 + inflationRate, yearsFromNow);
+    const base = EMPLOYEE_401K_LIMIT_2026 * inflationFactor;
+    const catchup = age >= CATCHUP_401K_AGE ? CATCHUP_401K_LIMIT_2026 * inflationFactor : 0;
+    return base + catchup;
   }
 
   // Bracket thresholds and the standard deduction are assumed to rise with
@@ -1008,17 +1029,24 @@
       const growthRateThisYear = salaryGrowthForAge(ageThisYear, earlyGrowth, lateGrowth);
       const yearsFromNow = ageThisYear - age;
 
-      // Nominal contribution = the savings-rate schedule applied to salary. This is
-      // always the Pre-tax (Traditional) contribution amount and the reference point
-      // for the "Equalize net pay" toggle.
+      // Nominal contribution = the savings-rate schedule applied to salary — the
+      // "desired" amount before any legal deferral limit is applied.
       const nominalContribution = salary * rateThisYear;
+      const contributionLimit401k = employee401kLimitForAge(ageThisYear, yearsFromNow, inflation);
+      // What Pre-tax actually contributes: the IRS 401(k) elective deferral limit
+      // (base + age-50 catch-up, inflation-adjusted) caps this regardless of what
+      // the savings-rate schedule would otherwise call for. This capped amount is
+      // also the reference point for the "Equalize net pay" toggle, since that's
+      // what Pre-tax genuinely does in real life.
+      const pretaxContribution = Math.min(nominalContribution, contributionLimit401k);
+
       const fica = estimateFicaTax(salary, yearsFromNow, inflation);
-      const taxPretaxRef = estimateFederalTax(Math.max(salary - nominalContribution, 0), yearsFromNow, inflation);
+      const taxPretaxRef = estimateFederalTax(Math.max(salary - pretaxContribution, 0), yearsFromNow, inflation);
       const taxRothRef = estimateFederalTax(salary, yearsFromNow, inflation);
 
       let contribution, federalTax;
       if (taxTreatment === TAX_TREATMENT_PRETAX){
-        contribution = nominalContribution;
+        contribution = pretaxContribution;
         federalTax = taxPretaxRef;
       } else {
         // Roth and Taxable both contribute after-tax dollars: tax is always on the
@@ -1029,12 +1057,16 @@
           // Solve the contribution so net take-home matches what Pre-tax would
           // give at the same nominal rate. Since this tax doesn't depend on the
           // contribution amount, there's a direct closed-form solution:
-          // netPretax = salary - taxPretaxRef - fica - nominalContribution
-          // netThis(C) = salary - taxRothRef - fica - C  =>  C = nominalContribution - (taxRothRef - taxPretaxRef)
-          const equalized = nominalContribution - (taxRothRef - taxPretaxRef);
+          // netPretax = salary - taxPretaxRef - fica - pretaxContribution
+          // netThis(C) = salary - taxRothRef - fica - C  =>  C = pretaxContribution - (taxRothRef - taxPretaxRef)
+          const equalized = pretaxContribution - (taxRothRef - taxPretaxRef);
           contribution = Math.max(0, Math.min(equalized, salary));
+        } else if (taxTreatment === TAX_TREATMENT_ROTH){
+          // Roth 401(k)/IRA deferrals share the same combined IRS limit as Traditional.
+          contribution = pretaxContribution;
         } else {
-          contribution = nominalContribution; // same dollar amount as Pre-tax (default behavior)
+          // Taxable (Brokerage) has no IRS deferral limit — the full schedule applies.
+          contribution = nominalContribution;
         }
       }
       const actualRate = salary > 0 ? contribution / salary : 0;
